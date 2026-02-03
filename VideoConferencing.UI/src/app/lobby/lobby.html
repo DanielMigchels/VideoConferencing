@@ -1,25 +1,59 @@
 <div class="w-screen h-screen flex flex-col justify-between">
-  <div class="flex justify-center items-center w-full h-full text-[#4c4c4c]">
+  <div class="flex justify-center items-center w-full h-full text-[#4c4c4c] overflow-auto">
+    
     <div>Currently not in call...</div>
+
+    
+    <!--
+
+    -->
+    <!--
+    <div class="w-full h-full overflow-auto text-[#4c4c4c]">
+      <div class="w-full min-h-full flex justify-center p-4">
+        <div class="flex flex-wrap justify-center gap-4 w-full max-w-7xl">
+          <div
+            class="flex-[0_0_100%] sm:flex-[0_0_48%] lg:flex-[0_0_32%] aspect-video bg-[#181818] rounded-xl flex items-center justify-center text-white text-xl max-w-none lg:max-w-md xl:max-w-lg">
+            
+          </div>
+          <div
+            class="flex-[0_0_100%] sm:flex-[0_0_48%] lg:flex-[0_0_32%] aspect-video bg-[#181818] rounded-xl flex items-center justify-center text-white text-xl max-w-none lg:max-w-md xl:max-w-lg">
+            
+          </div>
+          <div
+            class="flex-[0_0_100%] sm:flex-[0_0_48%] lg:flex-[0_0_32%] aspect-video bg-[#181818] rounded-xl flex items-center justify-center text-white text-xl max-w-none lg:max-w-md xl:max-w-lg">
+            
+          </div>
+          <div
+            class="flex-[0_0_100%] sm:flex-[0_0_48%] lg:flex-[0_0_32%] aspect-video bg-[#181818] rounded-xl flex items-center justify-center text-white text-xl max-w-none lg:max-w-md xl:max-w-lg">
+            
+          </div>
+          <div
+            class="flex-[0_0_100%] sm:flex-[0_0_48%] lg:flex-[0_0_32%] aspect-video bg-[#181818] rounded-xl flex items-center justify-center text-white text-xl max-w-none lg:max-w-md xl:max-w-lg">
+            
+          </div>
+        </div>
+      </div>
+    </div>    
+    -->
   </div>
   <div class="bg-[#181818] h-12 border-t border-t-[#2B2B2B] flex items-center justify-start">
     <div class="flex justify-start items-stretch w-full h-full ">
-      <button *ngFor="let room of rooms" 
-              class="bg-[#131313] flex gap-4 border-x border-x-[#1F1F1F] items-center px-4 hover:bg-[#1A1A1A] cursor-pointer transition-colors">
+      <button *ngFor="let room of rooms"
+        class="bg-[#131313] flex gap-4 border-x border-x-[#1F1F1F] items-center px-4 hover:bg-[#1A1A1A] cursor-pointer transition-colors">
         <div class="w-2 h-2 bg-[#434343] rounded-full">
         </div>
         <div class="flex items-center text-[#4c4c4c]">
           <ng-icon name="hero-user"></ng-icon>
           0
         </div>
-        <div (click)="deleteRoom(room.id)" 
-             class="flex items-center text-xl text-red-700 hover:text-red-600 transition-colors">
+        <div (click)="deleteRoom(room.id)"
+          class="flex items-center text-xl text-red-700 hover:text-red-600 transition-colors">
           <ng-icon name="hero-trash"></ng-icon>
         </div>
       </button>
       <div class="flex justify-center items-center px-4">
-        <button (click)="addRoom()" 
-                class="flex gap-2 text-[#4c4c4c] cursor-pointer hover:text-[#3c3c3c] transition-colors">
+        <button (click)="addRoom()"
+          class="flex gap-2 text-[#4c4c4c] cursor-pointer hover:text-[#3c3c3c] transition-colors">
           <div class="flex items-center text-xl">
             <ng-icon name="hero-plus"></ng-icon>
           </div>
