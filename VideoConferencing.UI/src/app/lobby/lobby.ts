@@ -12,23 +12,36 @@ import { Room } from '../../data/room';
 })
 export class Lobby implements OnInit {
   rooms: Room[] = [];
+  joinedRoom: Room | null = null;
 
   constructor(private ws: VideoConferencingWebSocketService) {
 
   }
 
   ngOnInit() {
-    this.ws.getRoomsUpdated().subscribe(x => {
+    this.ws.getRoomListUpdated().subscribe(x => {
       this.rooms = x.rooms;
     });
 
-    this.ws.getConnected().subscribe(() => {
-      this.ws.getRooms();
+    this.ws.getRoomUpdated().subscribe(x => {
+      this.joinedRoom = x.room;
     });
   }
 
   addRoom() {
     this.ws.addRoom();
+  }
+
+  joinRoom(roomId: string) {
+    this.ws.joinRoom(roomId);
+  }
+
+  leaveRoom() {
+    if (this.joinedRoom === undefined) {
+      return;
+    }
+
+    this.ws.leaveRoom();
   }
 
   deleteRoom(roomId: string) {

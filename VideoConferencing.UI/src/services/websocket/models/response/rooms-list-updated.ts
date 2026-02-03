@@ -1,7 +1,7 @@
 import { Room } from '../../../../data/room';
 import { WebsocketMessage } from '../../generic/models/websocket-message';
 
-export interface RoomsUpdated extends WebsocketMessage {
-  type: 'roomsUpdated';
+export interface RoomListUpdated extends WebsocketMessage {
+  type: 'roomListUpdated';
   rooms: Room[];
 }

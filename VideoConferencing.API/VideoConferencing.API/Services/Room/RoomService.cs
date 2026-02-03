@@ -4,15 +4,24 @@ public class RoomService : IRoomService
 {
     private List<Data.Room> rooms = [];
 
-    public List<Data.Room> Rooms 
-    { 
-        get 
-        { 
-            return rooms; 
+    public List<Data.Room> Rooms
+    {
+        get
+        {
+            return rooms;
         }
     }
 
-    public event EventHandler<List<Data.Room>>? OnRoomsUpdated;
+    public event EventHandler<List<Data.Room>>? OnRoomsListUpdated;
+    public event EventHandler<(List<Guid> SocketIds, Data.Room Room)>? OnRoomUpdated;
+    public event EventHandler<Guid>? OnClientRoomLeft;
+
+    public RoomService()
+    {
+        AddRoom();
+        AddRoom();
+        AddRoom();
+    }
 
     public Data.Room AddRoom()
     {
@@ -22,7 +31,7 @@ public class RoomService : IRoomService
         };
 
         rooms.Add(room);
-        OnRoomsUpdated?.Invoke(this, rooms);
+        OnRoomsListUpdated?.Invoke(this, Rooms);
         return room;
     }
 
@@ -32,7 +41,40 @@ public class RoomService : IRoomService
         if (room != null)
         {
             rooms.Remove(room);
-            OnRoomsUpdated?.Invoke(this, rooms);
+            OnRoomsListUpdated?.Invoke(this, Rooms);
         }
+    }
+
+    public void JoinRoom(Guid roomId, Guid socketId)
+    {
+        LeaveRoom(socketId);
+
+        var room = rooms.FirstOrDefault(r => r.Id == roomId);
+        if (room == null)
+        {
+            return;
+        }
+
+        if (room.Participants.Any(x => x == socketId))
+        {
+            return;
+        }
+
+        room.Participants.Add(socketId);
+        OnRoomsListUpdated?.Invoke(this, Rooms);
+        OnRoomUpdated?.Invoke(this, (room.Participants, room));
+    }
+
+    public void LeaveRoom(Guid socketId)
+    {
+        var rooms = Rooms.Where(x => x.Participants.Any(p => p == socketId)).ToList();
+        foreach (var room in rooms)
+        {
+            room.Participants.Remove(socketId);
+            OnRoomUpdated?.Invoke(this, (room.Participants, room));
+        }
+
+        OnRoomsListUpdated?.Invoke(this, Rooms);
+        OnClientRoomLeft?.Invoke(this, socketId);
     }
 }

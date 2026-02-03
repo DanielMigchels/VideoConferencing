@@ -1,20 +1,22 @@
 import { Injectable } from '@angular/core';
 import { Subject, Observable } from 'rxjs';
 import { WebsocketMessage } from './generic/models/websocket-message';
-import { RoomsUpdated } from './models/response/rooms-updated';
 import { DeleteRoom } from './models/request/delete-room';
 import { CreateRoom } from './models/request/create-room';
 import { isMessageOfType } from './generic/type-guards';
-import { GetRooms } from './models/request/get-rooms';
+import { RoomListUpdated } from './models/response/rooms-list-updated';
+import { JoinRoom } from './models/request/join-room';
+import { LeaveRoom } from './models/request/leave-room';
+import { RoomUpdated } from './models/response/room-updated';
 
 @Injectable({
   providedIn: 'root',
 })
 export class VideoConferencingWebSocketService {
-  
   private socket: WebSocket | null = null;
   private connected = new Subject<void>();
-  private roomsUpdatedSubject = new Subject<RoomsUpdated>();
+  private getRoomListUpdatedSubject = new Subject<RoomListUpdated>();
+  private getRoomUpdatedSubject = new Subject<RoomUpdated>();
 
   constructor() {
     this.connect();
@@ -27,13 +29,21 @@ export class VideoConferencingWebSocketService {
     this.sendMessage(JSON.stringify(message));
   }
 
-  getRooms(): void {
-    const message: GetRooms = {
-      type: 'getRooms'
+  joinRoom(roomId: string) {
+    const message: JoinRoom = {
+      type: 'joinRoom',
+      roomId: roomId
     };
     this.sendMessage(JSON.stringify(message));
   }
 
+  leaveRoom() {
+    const message: LeaveRoom = {
+      type: 'leaveRoom',
+    };
+    this.sendMessage(JSON.stringify(message));
+  }  
+  
   deleteRoom(roomId: string): void {
     const message: DeleteRoom = {
       type: 'deleteRoom',
@@ -42,8 +52,12 @@ export class VideoConferencingWebSocketService {
     this.sendMessage(JSON.stringify(message));
   }
 
-  getRoomsUpdated(): Observable<RoomsUpdated> {
-    return this.roomsUpdatedSubject.asObservable();
+  getRoomListUpdated(): Observable<RoomListUpdated> {
+    return this.getRoomListUpdatedSubject.asObservable();
+  }
+
+  getRoomUpdated(): Observable<RoomUpdated> {
+    return this.getRoomUpdatedSubject.asObservable();
   }
 
   getConnected(): Observable<void> {
@@ -76,8 +90,11 @@ export class VideoConferencingWebSocketService {
     try {
       const message: WebsocketMessage = JSON.parse(json);
       
-      if (isMessageOfType<RoomsUpdated>(message, 'roomsUpdated')) {
-        this.handleRoomsUpdated(message);
+      if (isMessageOfType<RoomListUpdated>(message, 'roomListUpdated')) {
+        this.handleRoomListUpdated(message);
+      }
+      else if (isMessageOfType<RoomUpdated>(message, 'roomUpdated')) {
+        this.handleRoomUpdated(message);
       } else {
         console.warn('Received unknown message type:', message.type);
       }
@@ -86,9 +103,14 @@ export class VideoConferencingWebSocketService {
     }
   }
 
-  private handleRoomsUpdated(message: RoomsUpdated): void {
-    console.log('Rooms updated:', message.rooms);
-    this.roomsUpdatedSubject.next(message);
+  handleRoomUpdated(message: RoomUpdated) {
+    console.log('Joined room updated:', message.room);
+    this.getRoomUpdatedSubject.next(message);
+  }
+
+  private handleRoomListUpdated(message: RoomListUpdated): void {
+    console.log('Room list updated:', message.rooms);
+    this.getRoomListUpdatedSubject.next(message);
   }
 
   private sendMessage(message: string): void {

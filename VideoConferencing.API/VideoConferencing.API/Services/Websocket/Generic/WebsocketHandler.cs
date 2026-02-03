@@ -8,6 +8,8 @@ namespace VideoConferencing.API.Services.Websocket.Generic;
 
 public abstract class WebsocketHandler : IWebsocketHandler
 {
+    public event EventHandler<Guid>? OnClose;
+    public event EventHandler<Guid>? OnOpen;
     private readonly ConcurrentDictionary<Guid, WebSocket> sockets = new();
 
     public async Task HandleWebSocketAsync(WebSocket webSocket)
@@ -16,6 +18,8 @@ public abstract class WebsocketHandler : IWebsocketHandler
         sockets.TryAdd(socketId, webSocket);
 
         var buffer = new byte[1024 * 128];
+
+        OnOpen?.Invoke(this, socketId);
 
         try
         {
@@ -41,8 +45,10 @@ public abstract class WebsocketHandler : IWebsocketHandler
         }
         finally
         {
+            OnClose?.Invoke(this, socketId);
             sockets.TryRemove(socketId, out _);
             await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed", CancellationToken.None);
+
         }
     }
 

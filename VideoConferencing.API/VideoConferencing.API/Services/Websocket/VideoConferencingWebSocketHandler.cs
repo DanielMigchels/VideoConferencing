@@ -1,4 +1,5 @@
-﻿using VideoConferencing.API.Data;
+﻿using System.Net.Sockets;
+using VideoConferencing.API.Data;
 using VideoConferencing.API.Services.Room;
 using VideoConferencing.API.Services.Websocket.Generic;
 using VideoConferencing.API.Services.Websocket.Generic.Models;
@@ -19,7 +20,27 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
         _logger = logger;
         _roomService = roomService;
 
-        _roomService.OnRoomsUpdated += OnRoomsUpdatedHandler;
+        base.OnOpen += VideoConferencingWebSocketHandler_OnOpen;
+        base.OnClose += VideoConferencingWebSocketHandler_OnClose;
+
+        _roomService.OnRoomsListUpdated += OnRoomsListUpdatedHandler;
+        _roomService.OnRoomUpdated += _roomService_OnRoomUpdated;
+        _roomService.OnClientRoomLeft += _roomService_OnClientRoomLeft;
+    }
+
+    private void VideoConferencingWebSocketHandler_OnClose(object? sender, Guid socketId)
+    {
+        _roomService.LeaveRoom(socketId);
+    }
+
+    private async void VideoConferencingWebSocketHandler_OnOpen(object? sender, Guid socketId)
+    {
+        var message = new RoomListUpdated
+        {
+            Rooms = _roomService.Rooms
+        };
+
+        await SendMessage(socketId, message);
     }
 
     public override async Task ProcessIncomingMessage(Guid socketId, WebsocketMessage message)
@@ -34,11 +55,14 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
         {
             switch (message)
             {
-                case GetRooms getRooms:
-                    await GetRoomsAsync(socketId, getRooms);
-                    break;
                 case CreateRoom createRoom:
                     await CreateRoomAsync(socketId, createRoom);
+                    break;
+                case JoinRoom joinRoom:
+                    await JoinRoomAsync(socketId, joinRoom);
+                    break;
+                case LeaveRoom leaveRoom:
+                    await LeaveRoomAsync(socketId, leaveRoom);
                     break;
                 case DeleteRoom deleteRoom:
                     await DeleteRoomAsync(socketId, deleteRoom);
@@ -54,14 +78,30 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
         }
     }
 
-    private async Task GetRoomsAsync(Guid socketId, GetRooms getRooms)
+    private async Task LeaveRoomAsync(Guid socketId, LeaveRoom leaveRoom)
     {
-        var message = new RoomsUpdated
+        if (leaveRoom is null)
         {
-            Rooms = _roomService.Rooms
-        };
+            _logger.LogWarning("LeaveRoom message was null for socket {SocketId}", socketId);
+            return;
+        }
 
-        await SendMessage(socketId, message);
+        _roomService.LeaveRoom(socketId);
+
+        await Task.CompletedTask;
+    }
+
+    private async Task JoinRoomAsync(Guid socketId, JoinRoom joinRoom)
+    {
+        if (joinRoom is null)
+        {
+            _logger.LogWarning("JoinRoom message was null for socket {SocketId}", socketId);
+            return;
+        }
+
+        _roomService.JoinRoom(joinRoom.RoomId, socketId);
+
+        await Task.CompletedTask;
     }
 
     private async Task CreateRoomAsync(Guid socketId, CreateRoom message)
@@ -90,15 +130,42 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
         await Task.CompletedTask;
     }
 
-    private async void OnRoomsUpdatedHandler(object? sender, List<Data.Room> rooms)
+    private async void OnRoomsListUpdatedHandler(object? sender, List<Data.Room> rooms)
     {
         _logger.LogInformation("Broadcasting rooms update to all clients. Total rooms: {RoomCount}", rooms.Count);
         
-        var message = new RoomsUpdated
+        var message = new RoomListUpdated
         {
             Rooms = rooms
         };
 
         await SendMessageToAllAsync(message);
     }
+
+    private void _roomService_OnRoomUpdated(object? sender, (List<Guid> SocketIds, Data.Room Room) e)
+    {
+        var (socketIds, room) = e;
+
+        _logger.LogInformation("Sending room update for Room {RoomId} to {SocketCount} clients", room.Id, socketIds.Count);
+        var message = new RoomUpdated
+        {
+            Room = room
+        };
+
+        foreach (var socketId in socketIds)
+        {
+            _ = SendMessage(socketId, message);
+        }
+    }
+
+    private void _roomService_OnClientRoomLeft(object? sender, Guid socketId)
+    {
+        var message = new RoomUpdated
+        {
+            Room = null
+        };
+
+        _ = SendMessage(socketId, message);
+    }
+    
 }

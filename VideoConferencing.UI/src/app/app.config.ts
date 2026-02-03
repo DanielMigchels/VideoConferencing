@@ -2,13 +2,13 @@ import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZoneChang
 import { provideRouter } from '@angular/router';
 import { provideIcons } from '@ng-icons/core';
 import { routes } from './app.routes';
-import { heroPlus, heroTrash, heroUser } from '@ng-icons/heroicons/outline';
+import { heroPhoneSolid, heroPlusSolid, heroTrashSolid, heroUserSolid } from '@ng-icons/heroicons/solid';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideIcons({heroPlus, heroUser, heroTrash})
+    provideIcons({heroPlusSolid, heroUserSolid, heroTrashSolid, heroPhoneSolid})
   ]
 };

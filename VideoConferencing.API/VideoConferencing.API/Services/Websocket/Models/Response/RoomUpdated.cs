@@ -3,8 +3,8 @@ using VideoConferencing.API.Services.Websocket.Generic.Models;
 
 namespace VideoConferencing.API.Services.Websocket.Models.Response;
 
-public sealed class RoomsUpdated : WebsocketMessage
+public class RoomUpdated : WebsocketMessage
 {
-    [JsonPropertyName("rooms")]
-    public required List<Data.Room> Rooms { get; set; }
+    [JsonPropertyName("room")]
+    public required Data.Room? Room { get; set; }
 }
