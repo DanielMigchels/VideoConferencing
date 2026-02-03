@@ -1,6 +1,15 @@
-﻿namespace VideoConferencing.API.Services.Websocket.Generic.Models;
+﻿using System.Text.Json.Serialization;
+using VideoConferencing.API.Services.Websocket.Models.Request;
+using VideoConferencing.API.Services.Websocket.Models.Response;
 
-public class WebsocketMessage
+namespace VideoConferencing.API.Services.Websocket.Generic.Models;
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(CreateRoom), typeDiscriminator: "createRoom")]
+[JsonDerivedType(typeof(DeleteRoom), typeDiscriminator: "deleteRoom")]
+[JsonDerivedType(typeof(GetRooms), typeDiscriminator: "getRooms")]
+[JsonDerivedType(typeof(RoomsUpdated), typeDiscriminator: "roomsUpdated")]
+
+public abstract class WebsocketMessage
 {
-    public required string Type { get; set; }
 }

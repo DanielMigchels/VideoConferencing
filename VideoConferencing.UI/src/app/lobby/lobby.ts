@@ -1,23 +1,29 @@
 import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { NgIconComponent } from "@ng-icons/core";
 import { VideoConferencingWebSocketService } from '../../services/websocket/video-conferencing-web-socket.service';
+import { Room } from '../../data/room';
 
 @Component({
   selector: 'app-lobby',
-  imports: [NgIconComponent],
+  imports: [CommonModule, NgIconComponent],
   templateUrl: './lobby.html',
   styleUrl: './lobby.css',
 })
 export class Lobby implements OnInit {
-  rooms: any;
+  rooms: Room[] = [];
 
   constructor(private ws: VideoConferencingWebSocketService) {
 
   }
 
   ngOnInit() {
-    this.ws.getRoomsUpdatedSubject().subscribe(rooms => {
-      this.rooms = rooms;
+    this.ws.getRoomsUpdated().subscribe(x => {
+      this.rooms = x.rooms;
+    });
+
+    this.ws.getConnected().subscribe(() => {
+      this.ws.getRooms();
     });
   }
 
@@ -25,7 +31,7 @@ export class Lobby implements OnInit {
     this.ws.addRoom();
   }
 
-  deleteRoom() {
-    this.ws.deleteRoom();
+  deleteRoom(roomId: string) {
+    this.ws.deleteRoom(roomId);
   }
 }

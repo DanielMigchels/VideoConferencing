@@ -10,6 +10,8 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .CreateLogger();
 
+builder.Host.UseSerilog();
+
 builder.Services.AddSingleton<IRoomService, RoomService>();
 builder.Services.AddSingleton<VideoConferencingWebSocketHandler>();
 
@@ -39,6 +41,8 @@ app.Map("/ws", async context =>
 
 app.UseRouting();
 app.UseSpaStaticFiles();
+
+app.UseEndpoints(x => { });
 
 app.UseSpa(spa =>
 {

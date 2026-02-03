@@ -2,6 +2,6 @@
 
 namespace VideoConferencing.API.Services.Websocket.Models.Request;
 
-public class CreateRoom : WebsocketMessage
+public sealed class CreateRoom : WebsocketMessage
 {
 }

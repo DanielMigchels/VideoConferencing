@@ -15,7 +15,7 @@ public abstract class WebsocketHandler : IWebsocketHandler
         var socketId = Guid.NewGuid();
         sockets.TryAdd(socketId, webSocket);
 
-        var buffer = new byte[1024 * 4];
+        var buffer = new byte[1024 * 128];
 
         try
         {
