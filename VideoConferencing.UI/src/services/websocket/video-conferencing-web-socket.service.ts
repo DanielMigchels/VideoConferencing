@@ -8,6 +8,7 @@ import { RoomListUpdated } from './models/response/rooms-list-updated';
 import { JoinRoom } from './models/request/join-room';
 import { LeaveRoom } from './models/request/leave-room';
 import { RoomUpdated } from './models/response/room-updated';
+import { SendOffer } from './models/request/send-offer';
 
 @Injectable({
   providedIn: 'root',
@@ -48,6 +49,16 @@ export class VideoConferencingWebSocketService {
     const message: DeleteRoom = {
       type: 'deleteRoom',
       roomId: roomId
+    };
+    this.sendMessage(JSON.stringify(message));
+  }
+
+  
+  sendOffer( roomId: string, offer: RTCSessionDescriptionInit) {
+    const message: SendOffer = {
+      type: 'sendOffer',
+      roomId: roomId,
+      offer: offer
     };
     this.sendMessage(JSON.stringify(message));
   }

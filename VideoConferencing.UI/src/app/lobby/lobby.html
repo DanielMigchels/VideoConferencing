@@ -1,5 +1,5 @@
-<div class="w-screen h-screen flex flex-col justify-between">
-  <div class="flex justify-center items-center w-full h-full text-[#4c4c4c] overflow-auto">
+<div class="flex h-full flex-col justify-between overflow-hidden">
+  <div class="flex justify-center items-center w-full h-full text-[#4c4c4c] overflow-hidden">
 
     <div *ngIf="joinedRoom === null">Currently not in call</div>
 
@@ -11,10 +11,18 @@
               class="flex-[0_0_100%] sm:flex-[0_0_48%] lg:flex-[0_0_32%] aspect-video bg-[#181818] rounded-xl flex items-center justify-center text-white text-xl max-w-none lg:max-w-md xl:max-w-lg">
 
             </div>
+
+            <div
+              class="flex-[0_0_100%] sm:flex-[0_0_48%] lg:flex-[0_0_32%]  bg-[#181818] rounded-xl flex items-center justify-center text-white text-xl max-w-none lg:max-w-md xl:max-w-lg">
+              <video #localVideo autoplay playsinline muted class="w-full h-full object-cover rounded"></video>
+            </div>
+            <!--
+            
+            -->
           </div>
         </div>
       </div>
-      <div class="">
+      <div class="py-4">
         <button (click)="leaveRoom()"
           class="px-4 py-2 bg-red-700 hover:bg-red-800 rounded-full text-[#0c0c0c] flex justify-center items-center w-16 h-16 cursor-pointer">
           <ng-icon name="hero-phone-solid"></ng-icon>
@@ -23,14 +31,16 @@
     </div>
   </div>
   <div
-    class="bg-[#181818] h-16 border-t border-t-[#2B2B2B] flex items-center justify-center overflow-y-hidden overflow-x-auto">
+    class="mb-14 sm:mb-0 bg-[#181818] h-16 border-t border-t-[#2B2B2B] flex items-center justify-center overflow-y-hidden overflow-x-auto">
     <div class="flex justify-start items-stretch w-full h-full ">
       <button *ngFor="let room of rooms" (click)="joinRoom(room.id)"
         class="bg-[#131313] flex border-x border-x-[#1F1F1F] items-start hover:bg-[#1A1A1A] cursor-pointer transition-colors">
         <div class="h-full flex flex-row gap-4 justify-center items-center px-4">
           <div *ngIf="room.participantCount === 0" class="w-2 h-2 bg-[#434343] rounded-full"></div>
-          <div *ngIf="room.participantCount !== 0 && room.id !== joinedRoom?.id" class="w-2 h-2 bg-lime-600 rounded-full"></div>
-          <div *ngIf="room.participantCount !== 0 && room.id === joinedRoom?.id" class="w-2 h-2 bg-blue-300 rounded-full"></div>
+          <div *ngIf="room.participantCount !== 0 && room.id !== joinedRoom?.id"
+            class="w-2 h-2 bg-lime-600 rounded-full"></div>
+          <div *ngIf="room.participantCount !== 0 && room.id === joinedRoom?.id"
+            class="w-2 h-2 bg-blue-300 rounded-full"></div>
           <div class="flex items-center text-[#4c4c4c]">
             <ng-icon name="hero-user-solid"></ng-icon>
             {{room.participantCount}}
@@ -47,7 +57,7 @@
           <div class="flex items-center text-xl">
             <ng-icon name="hero-plus-solid"></ng-icon>
           </div>
-          <div>
+          <div class="min-w-24">
             Create room
           </div>
         </button>

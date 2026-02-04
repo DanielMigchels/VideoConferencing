@@ -1,5 +1,4 @@
-﻿using System.Net.Sockets;
-using VideoConferencing.API.Data;
+﻿using VideoConferencing.API.Data;
 using VideoConferencing.API.Services.Room;
 using VideoConferencing.API.Services.Websocket.Generic;
 using VideoConferencing.API.Services.Websocket.Generic.Models;
@@ -67,6 +66,9 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
                 case DeleteRoom deleteRoom:
                     await DeleteRoomAsync(socketId, deleteRoom);
                     break;
+                case SendOffer sendOffer:
+                    await SendOfferAsync(socketId, sendOffer);
+                    break;
                 default:
                     _logger.LogWarning("Unknown message type received for socket {SocketId}", socketId);
                     break;
@@ -126,6 +128,21 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
         }
 
         _roomService.DeleteRoom(message.RoomId);
+
+        await Task.CompletedTask;
+    }
+
+    private async Task SendOfferAsync(Guid socketId, SendOffer sendOffer)
+    {
+        var answer = _roomService.HandleOffer(sendOffer.RoomId, socketId, sendOffer.Offer.ToString() ?? string.Empty);
+
+        var message = new OfferProcessed
+        {
+            Sdp = answer.sdp,
+            AnswerType = answer.type.ToString().ToLower()
+        };
+
+        _ = SendMessage(socketId, message);
 
         await Task.CompletedTask;
     }

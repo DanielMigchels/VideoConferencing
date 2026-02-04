@@ -1,4 +1,5 @@
-﻿using System.Net.Sockets;
+﻿using SIPSorcery.Net;
+using System.Text.Json;
 
 namespace VideoConferencing.API.Services.Room;
 
@@ -21,8 +22,6 @@ public class RoomService : IRoomService
     public RoomService()
     {
         AddRoom();
-        AddRoom();
-        AddRoom();
     }
 
     public Data.Room AddRoom()
@@ -40,6 +39,11 @@ public class RoomService : IRoomService
     public void DeleteRoom(Guid RoomId)
     {
         var room = rooms.FirstOrDefault(r => r.Id == RoomId);
+
+        if (room == null)
+        {
+            return;
+        }
 
         foreach (var participant in room.Participants)
         {
@@ -90,5 +94,53 @@ public class RoomService : IRoomService
 
         OnRoomsListUpdated?.Invoke(this, Rooms);
         OnClientRoomLeft?.Invoke(this, socketId);
+    }
+
+    public RTCSessionDescriptionInit HandleOffer(Guid roomId, Guid socketId, string offerJson)
+    {
+        if (string.IsNullOrWhiteSpace(offerJson))
+        {
+            throw new Exception("OfferJson was empty");
+        }
+
+        var offer = ParseOfferJson(offerJson);
+
+        var config = new RTCConfiguration
+        {
+            X_UseRtpFeedbackProfile = true
+        };
+        var pc = new RTCPeerConnection(config);
+
+        var opusFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 111, "opus", 48000, 2);
+        var pcmuFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 0, "PCMU", 8000);
+        var audioTrack = new MediaStreamTrack(SDPMediaTypesEnum.audio, false, new List<SDPAudioVideoMediaFormat> { opusFormat, pcmuFormat }, MediaStreamStatusEnum.SendRecv);
+        pc.addTrack(audioTrack);
+
+        var vp8Format = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 96, "VP8", 90000);
+        var videoTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
+        pc.addTrack(videoTrack);
+
+        var answer = pc.createAnswer();
+        pc.setLocalDescription(answer);
+
+        return answer;
+    }
+
+    private static RTCSessionDescriptionInit ParseOfferJson(string offerJson)
+    {
+        using var offerDoc = JsonDocument.Parse(offerJson);
+        var root = offerDoc.RootElement;
+
+        var sdp = root.GetProperty("sdp").GetString();
+        var typeStr = root.GetProperty("type").GetString();
+
+        var sdpType = typeStr?.ToLower() == "offer" ? RTCSdpType.offer : RTCSdpType.answer;
+        var offer = new RTCSessionDescriptionInit
+        {
+            type = sdpType,
+            sdp = sdp
+        };
+
+        return offer;
     }
 }

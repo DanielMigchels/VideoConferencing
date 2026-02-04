@@ -1,4 +1,6 @@
-﻿namespace VideoConferencing.API.Services.Room;
+﻿using SIPSorcery.Net;
+
+namespace VideoConferencing.API.Services.Room;
 
 public interface IRoomService
 {
@@ -10,4 +12,5 @@ public interface IRoomService
     public void DeleteRoom(Guid RoomId);
     public void JoinRoom(Guid roomId, Guid socketId);
     public void LeaveRoom(Guid socketId);
+    public RTCSessionDescriptionInit HandleOffer(Guid roomId, Guid socketId, string offer);
 }
