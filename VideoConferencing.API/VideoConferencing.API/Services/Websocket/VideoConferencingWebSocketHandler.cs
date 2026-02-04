@@ -167,5 +167,4 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
 
         _ = SendMessage(socketId, message);
     }
-    
 }

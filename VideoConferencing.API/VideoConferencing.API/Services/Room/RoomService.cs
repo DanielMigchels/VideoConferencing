@@ -1,4 +1,6 @@
-﻿namespace VideoConferencing.API.Services.Room;
+﻿using System.Net.Sockets;
+
+namespace VideoConferencing.API.Services.Room;
 
 public class RoomService : IRoomService
 {
@@ -38,6 +40,12 @@ public class RoomService : IRoomService
     public void DeleteRoom(Guid RoomId)
     {
         var room = rooms.FirstOrDefault(r => r.Id == RoomId);
+
+        foreach (var participant in room.Participants)
+        {
+            OnClientRoomLeft?.Invoke(this, participant);
+        }
+
         if (room != null)
         {
             rooms.Remove(room);
@@ -68,6 +76,12 @@ public class RoomService : IRoomService
     public void LeaveRoom(Guid socketId)
     {
         var rooms = Rooms.Where(x => x.Participants.Any(p => p == socketId)).ToList();
+
+        if (!rooms.Any())
+        {
+            return;
+        }
+
         foreach (var room in rooms)
         {
             room.Participants.Remove(socketId);

@@ -48,7 +48,6 @@ public abstract class WebsocketHandler : IWebsocketHandler
             OnClose?.Invoke(this, socketId);
             sockets.TryRemove(socketId, out _);
             await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed", CancellationToken.None);
-
         }
     }
 
