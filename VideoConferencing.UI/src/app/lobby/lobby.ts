@@ -66,8 +66,10 @@ export class Lobby implements OnInit {
 
   localStream?: MediaStream | null;
   @ViewChild('localVideo') localVideo?: ElementRef<HTMLVideoElement>;
+  @ViewChild('remoteVideo') remoteVideo?: ElementRef<HTMLVideoElement>;
   private localPeerConnection: RTCPeerConnection | null = null;
   private readonly configuration: RTCConfiguration = {};
+  remoteParticipants: RemoteParticipant[] = [];
 
   async startVideo() {
     if (this.localStream) {
@@ -120,6 +122,24 @@ export class Lobby implements OnInit {
 
     this.localPeerConnection.ontrack = (event) => {
       console.log('Received remote track:', event.streams);
+      const remoteStream = event.streams[0];
+
+      this.remoteParticipants.push({
+        stream: remoteStream
+      });
+
+      setTimeout(() => {
+        if (this.remoteVideo) {
+          this.remoteVideo.nativeElement.srcObject = remoteStream;
+        }
+      }, 100);
+
+      
+    setTimeout(() => {
+      if (this.localVideo && this.localStream) {
+        this.localVideo.nativeElement.srcObject = videoOnlyStream;
+      }
+    }, 100);
     };
 
     this.localPeerConnection.onconnectionstatechange = () => {
@@ -143,11 +163,6 @@ export class Lobby implements OnInit {
     };
 
     await this.localPeerConnection.setRemoteDescription(description);
-    await this.processPendingIceCandidates();
-  }
-
-  processPendingIceCandidates() {
-
   }
 
   async stopVideo() {
@@ -159,4 +174,8 @@ export class Lobby implements OnInit {
     this.localStream?.getTracks().forEach(track => track.stop());
     this.localStream = null;
   }
+}
+
+interface RemoteParticipant {
+  stream?: MediaStream;
 }
