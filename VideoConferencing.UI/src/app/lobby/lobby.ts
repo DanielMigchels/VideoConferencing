@@ -16,7 +16,6 @@ export class Lobby implements OnInit {
   rooms: Room[] = [];
   joinedRoom: Room | null = null;
 
-
   constructor(private ws: VideoConferencingWebSocketService) {
 
   }
@@ -27,8 +26,13 @@ export class Lobby implements OnInit {
     });
 
     this.ws.getRoomUpdated().subscribe(async x => {
-      this.joinedRoom = x.room;
-      await this.startVideo();
+      if (this.joinedRoom === null) {
+        this.joinedRoom = x.room;
+        this.startVideo();
+      }
+      else {
+        this.joinedRoom = x.room;
+      }
     });
 
     this.ws.getOfferProcessed().subscribe(async x => {
@@ -60,27 +64,20 @@ export class Lobby implements OnInit {
 
 
 
-
-  // Todo: cleanup
-
-
   localStream?: MediaStream | null;
   @ViewChild('localVideo') localVideo?: ElementRef<HTMLVideoElement>;
   @ViewChild('remoteVideo') remoteVideo?: ElementRef<HTMLVideoElement>;
   private localPeerConnection: RTCPeerConnection | null = null;
   private readonly configuration: RTCConfiguration = {};
-  remoteParticipants: RemoteParticipant[] = [];
+  remoteParticipants: MediaStream[] = [];
 
   async startVideo() {
-    if (this.localStream) {
-      this.stopVideo();
-    }
-
     if (this.joinedRoom === null) {
       return;
     }
+
     if (this.localStream) {
-      return;
+      this.stopVideo();
     }
 
     console.log('Starting local video...');
@@ -124,22 +121,13 @@ export class Lobby implements OnInit {
       console.log('Received remote track:', event.streams);
       const remoteStream = event.streams[0];
 
-      this.remoteParticipants.push({
-        stream: remoteStream
-      });
+      this.remoteParticipants.push(remoteStream);
 
       setTimeout(() => {
         if (this.remoteVideo) {
           this.remoteVideo.nativeElement.srcObject = remoteStream;
         }
       }, 100);
-
-      
-    setTimeout(() => {
-      if (this.localVideo && this.localStream) {
-        this.localVideo.nativeElement.srcObject = videoOnlyStream;
-      }
-    }, 100);
     };
 
     this.localPeerConnection.onconnectionstatechange = () => {
@@ -174,8 +162,4 @@ export class Lobby implements OnInit {
     this.localStream?.getTracks().forEach(track => track.stop());
     this.localStream = null;
   }
-}
-
-interface RemoteParticipant {
-  stream?: MediaStream;
 }

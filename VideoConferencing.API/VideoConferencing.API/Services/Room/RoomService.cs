@@ -228,12 +228,12 @@ public class RoomService : IRoomService
 
     private void Pc_OnTimeout(SDPMediaTypesEnum mediaType, Guid roomId, Guid socketId, RTCPeerConnection pc)
     {
-        logger.LogWarning($"Timeout on for {mediaType} | RoomId: {roomId} | SocketId: {socketId}");
+        // logger.LogWarning($"Timeout on for {mediaType} | RoomId: {roomId} | SocketId: {socketId}");
     }
 
     private void Pc_OnReceiveReport(System.Net.IPEndPoint remoteEP, SDPMediaTypesEnum mediaType, RTCPCompoundPacket rtcpReport, Guid roomId, Guid socketId, RTCPeerConnection pc)
     {
-        logger.LogInformation($"Received RTCP report from type: {mediaType} | RoomId: {roomId} | SocketId: {socketId}");
+        // logger.LogInformation($"Received RTCP report from type: {mediaType} | RoomId: {roomId} | SocketId: {socketId}");
     }
 
     private void Pc_OnRtpPacketReceived(System.Net.IPEndPoint remoteEP, SDPMediaTypesEnum mediaType, RTPPacket rtpPacket, Guid roomId, Guid socketId, RTCPeerConnection pc)
@@ -280,12 +280,12 @@ public class RoomService : IRoomService
 
     private void Pc_onsignalingstatechange(Guid roomId, Guid socketId, RTCPeerConnection pc)
     {
-        logger.LogInformation($"Signaling state change for pc | RoomId: {roomId} | SocketId: {socketId}");
+        // logger.LogInformation($"Signaling state change for pc | RoomId: {roomId} | SocketId: {socketId}");
     }
 
     private void Pc_onicecandidate(RTCIceCandidate candidate, Guid roomId, Guid socketId, RTCPeerConnection pc)
     {
-        logger.LogInformation($"Server ICE candidate: {candidate.candidate} | RoomId: {roomId} | SocketId: {socketId}");
+        // logger.LogInformation($"Server ICE candidate: {candidate.candidate} | RoomId: {roomId} | SocketId: {socketId}");
     }
 
     private static RTCSessionDescriptionInit ParseOfferJson(string offerJson)
