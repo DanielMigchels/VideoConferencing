@@ -69,7 +69,7 @@ export class Lobby implements OnInit {
   @ViewChild('remoteVideo') remoteVideo?: ElementRef<HTMLVideoElement>;
   private localPeerConnection: RTCPeerConnection | null = null;
   private readonly configuration: RTCConfiguration = {};
-  remoteParticipants: MediaStream[] = [];
+  remoteParticipant?: MediaStream;
 
   async startVideo() {
     if (this.joinedRoom === null) {
@@ -99,11 +99,9 @@ export class Lobby implements OnInit {
       this.localStream.getVideoTracks()
     );
 
-    setTimeout(() => {
-      if (this.localVideo && this.localStream) {
-        this.localVideo.nativeElement.srcObject = videoOnlyStream;
-      }
-    }, 100);
+    if (this.localVideo) {
+      this.localVideo.nativeElement.srcObject = videoOnlyStream;
+    }
 
     this.localPeerConnection = new RTCPeerConnection(this.configuration);
 
@@ -121,13 +119,11 @@ export class Lobby implements OnInit {
       console.log('Received remote track:', event.streams);
       const remoteStream = event.streams[0];
 
-      this.remoteParticipants.push(remoteStream);
+      this.remoteParticipant = remoteStream;
 
-      setTimeout(() => {
-        if (this.remoteVideo) {
-          this.remoteVideo.nativeElement.srcObject = remoteStream;
-        }
-      }, 100);
+      if (this.remoteVideo) {
+        this.remoteVideo.nativeElement.srcObject = remoteStream;
+      }
     };
 
     this.localPeerConnection.onconnectionstatechange = () => {
