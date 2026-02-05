@@ -7,5 +7,6 @@ public class OfferProcessed : WebsocketMessage
 {
     [JsonPropertyName("sdp")]
     public required string Sdp { get; set; }
+    [JsonPropertyName("answerType")]
     public required string AnswerType { get; set; }
 }

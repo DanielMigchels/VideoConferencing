@@ -9,6 +9,7 @@ import { JoinRoom } from './models/request/join-room';
 import { LeaveRoom } from './models/request/leave-room';
 import { RoomUpdated } from './models/response/room-updated';
 import { SendOffer } from './models/request/send-offer';
+import { OfferProcessed } from './models/response/offer-processed';
 
 @Injectable({
   providedIn: 'root',
@@ -18,6 +19,7 @@ export class VideoConferencingWebSocketService {
   private connected = new Subject<void>();
   private getRoomListUpdatedSubject = new Subject<RoomListUpdated>();
   private getRoomUpdatedSubject = new Subject<RoomUpdated>();
+  private getOfferProcessedSubject = new Subject<OfferProcessed>();
 
   constructor() {
     this.connect();
@@ -63,6 +65,10 @@ export class VideoConferencingWebSocketService {
     this.sendMessage(JSON.stringify(message));
   }
 
+  getConnected(): Observable<void> {
+    return this.connected.asObservable();
+  }
+
   getRoomListUpdated(): Observable<RoomListUpdated> {
     return this.getRoomListUpdatedSubject.asObservable();
   }
@@ -71,8 +77,8 @@ export class VideoConferencingWebSocketService {
     return this.getRoomUpdatedSubject.asObservable();
   }
 
-  getConnected(): Observable<void> {
-    return this.connected.asObservable();
+  getOfferProcessed(): Observable<OfferProcessed> {
+    return this.getOfferProcessedSubject.asObservable();
   }
 
   private connect(): void {
@@ -106,7 +112,11 @@ export class VideoConferencingWebSocketService {
       }
       else if (isMessageOfType<RoomUpdated>(message, 'roomUpdated')) {
         this.handleRoomUpdated(message);
-      } else {
+      } 
+      else if (isMessageOfType<OfferProcessed>(message, 'offerProcessed')) {
+        this.handleOfferProcessed(message);
+      }
+      else {
         console.warn('Received unknown message type:', message.type);
       }
     } catch (error) {
@@ -122,6 +132,11 @@ export class VideoConferencingWebSocketService {
   private handleRoomListUpdated(message: RoomListUpdated): void {
     console.log('Room list updated:', message.rooms);
     this.getRoomListUpdatedSubject.next(message);
+  }
+
+  handleOfferProcessed(message: OfferProcessed) {
+    console.log('Offer processed:', message);
+    this.getOfferProcessedSubject.next(message);
   }
 
   private sendMessage(message: string): void {

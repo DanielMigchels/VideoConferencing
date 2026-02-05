@@ -6,6 +6,7 @@ namespace VideoConferencing.API.Services.Room;
 public class RoomService : IRoomService
 {
     private List<Data.Room> rooms = [];
+    private readonly ILogger<RoomService> logger;
 
     public List<Data.Room> Rooms
     {
@@ -19,9 +20,10 @@ public class RoomService : IRoomService
     public event EventHandler<(List<Guid> SocketIds, Data.Room Room)>? OnRoomUpdated;
     public event EventHandler<Guid>? OnClientRoomLeft;
 
-    public RoomService()
+    public RoomService(ILogger<RoomService> logger)
     {
         AddRoom();
+        this.logger = logger;
     }
 
     public Data.Room AddRoom()
@@ -119,6 +121,38 @@ public class RoomService : IRoomService
         var vp8Format = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 96, "VP8", 90000);
         var videoTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
         pc.addTrack(videoTrack);
+
+        pc.onicecandidate += async (candidate) =>
+        {
+            logger.LogInformation($"Server ICE candidate: {candidate.candidate}");
+        };
+
+        pc.onsignalingstatechange += () =>
+        {
+            logger.LogInformation($"Signaling state: {pc.signalingState}");
+        };
+
+        pc.OnRtpPacketReceived += (remoteEP, mediaType, rtpPacket) =>
+        {
+            logger.LogInformation($"Received {mediaType} RTP packet, size: {rtpPacket.Payload.Length}");
+        };
+
+        pc.OnReceiveReport += (remoteEP, mediaType, rtcpReport) =>
+        {
+            logger.LogInformation($"Received RTCP report from type: {mediaType}");
+        };
+
+        pc.OnTimeout += (mediaType) =>
+        {
+            logger.LogWarning($"Timeout on for {mediaType}");
+        };
+
+
+        var result = pc.setRemoteDescription(offer);
+        if (result != SIPSorcery.Net.SetDescriptionResultEnum.OK)
+        {
+            throw new Exception("Could not set remote description");
+        }
 
         var answer = pc.createAnswer();
         pc.setLocalDescription(answer);
