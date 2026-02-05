@@ -30,9 +30,10 @@ public class Room
 public class RoomParticipant
 {
     public Guid SocketId { get; set; }
-    public RTCPeerConnection? PeerConnection { get; set; }
-
     [JsonIgnore]
+    public RTCPeerConnection? PeerConnection { get; set; }
+    [JsonIgnore]
+    public uint Ssrc { get; set; }
     public Action<RTCIceCandidate>? OnIceCandidateHandler { get; set; }
     [JsonIgnore]
     public Action? OnSignalingStateChangeHandler { get; set; }

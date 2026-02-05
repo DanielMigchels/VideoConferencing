@@ -199,7 +199,6 @@ public class RoomService : IRoomService
         var videoTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
         pc.addTrack(videoTrack);
 
-
         var result = pc.setRemoteDescription(offer);
         if (result != SIPSorcery.Net.SetDescriptionResultEnum.OK)
         {
@@ -222,6 +221,12 @@ public class RoomService : IRoomService
         pc.OnTimeout += participant.OnTimeoutHandler;
 
         participant.PeerConnection = pc;
+
+        Task.Run(async () =>
+        {
+            await Task.Delay(300);
+            RequestKeyframesForNewParticipant(roomId, socketId);
+        });
 
         return answer;
     }
@@ -247,6 +252,11 @@ public class RoomService : IRoomService
         if (participants == null || participants.Count == 0)
         {
             return;
+        }
+
+        if (mediaType == SDPMediaTypesEnum.video)
+        {
+            participants.First(x => x.SocketId == socketId).Ssrc = rtpPacket.Header.SyncSource;
         }
 
         var payload = rtpPacket.Payload;
@@ -286,6 +296,49 @@ public class RoomService : IRoomService
     private void Pc_onicecandidate(RTCIceCandidate candidate, Guid roomId, Guid socketId, RTCPeerConnection pc)
     {
         // logger.LogInformation($"Server ICE candidate: {candidate.candidate} | RoomId: {roomId} | SocketId: {socketId}");
+    }
+
+    private void RequestKeyframeFrom(Guid participantId)
+    {
+        if (!rooms.Values.Any(r => r.RoomParticipants.Any(p => p.SocketId == participantId && p.Ssrc != 0)))
+        {
+            return;
+        }
+
+        foreach (var room in rooms.Values)
+        {
+            var participant = room.RoomParticipants.FirstOrDefault(p => p.SocketId == participantId);
+            if (participant?.PeerConnection != null && participant.PeerConnection.connectionState == RTCPeerConnectionState.connected)
+            {
+                try
+                {
+                    var pli = new RTCPFeedback(participant.Ssrc, participant.Ssrc, PSFBFeedbackTypesEnum.PLI);
+                    participant.PeerConnection.SendRtcpFeedback(SDPMediaTypesEnum.video, pli);
+                    logger.LogDebug($"Sent PLI keyframe request to participant {participantId} for SSRC {participant.Ssrc}");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, $"Failed to send PLI to participant {participantId}");
+                }
+                break;
+            }
+        }
+    }
+
+    private void RequestKeyframesForNewParticipant(Guid roomId, Guid newParticipantId)
+    {
+        if (!rooms.TryGetValue(roomId, out var room))
+        {
+            return;
+        }
+
+        foreach (var participant in room.RoomParticipants)
+        {
+            if (participant.SocketId != newParticipantId)
+            {
+                RequestKeyframeFrom(participant.SocketId);
+            }
+        }
     }
 
     private static RTCSessionDescriptionInit ParseOfferJson(string offerJson)
