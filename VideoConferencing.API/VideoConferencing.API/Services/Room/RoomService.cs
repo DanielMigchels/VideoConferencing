@@ -1,18 +1,19 @@
 ﻿using SIPSorcery.Net;
 using System.Text.Json;
+using System.Collections.Concurrent;
 
 namespace VideoConferencing.API.Services.Room;
 
 public class RoomService : IRoomService
 {
-    private List<Data.Room> rooms = [];
+    private ConcurrentDictionary<Guid, Data.Room> rooms = new();
     private readonly ILogger<RoomService> logger;
 
     public List<Data.Room> Rooms
     {
         get
         {
-            return rooms;
+            return rooms.Values.ToList();
         }
     }
 
@@ -33,16 +34,14 @@ public class RoomService : IRoomService
             Id = Guid.NewGuid(),
         };
 
-        rooms.Add(room);
+        rooms[room.Id] = room;
         OnRoomsListUpdated?.Invoke(this, Rooms);
         return room;
     }
 
     public void DeleteRoom(Guid RoomId)
     {
-        var room = rooms.FirstOrDefault(r => r.Id == RoomId);
-
-        if (room == null)
+        if (!rooms.TryGetValue(RoomId, out var room))
         {
             return;
         }
@@ -53,23 +52,16 @@ public class RoomService : IRoomService
         {
             if (participant.PeerConnection != null)
             {
-                // Unsubscribe using stored delegates
-                if (participant.OnIceCandidateHandler != null)
-                    participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
-                if (participant.OnSignalingStateChangeHandler != null)
-                    participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
-                if (participant.OnRtpPacketReceivedHandler != null)
-                    participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
-                if (participant.OnReceiveReportHandler != null)
-                    participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
-                if (participant.OnTimeoutHandler != null)
-                    participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
+                participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
+                participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
+                participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
+                participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
+                participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
 
                 participant.PeerConnection.Close("Room left");
                 participant.PeerConnection.Dispose();
                 participant.PeerConnection = null;
 
-                // Clear handlers
                 participant.OnIceCandidateHandler = null;
                 participant.OnSignalingStateChangeHandler = null;
                 participant.OnRtpPacketReceivedHandler = null;
@@ -82,19 +74,15 @@ public class RoomService : IRoomService
             OnClientRoomLeft?.Invoke(this, participant.SocketId);
         }
 
-        if (room != null)
-        {
-            rooms.Remove(room);
-            OnRoomsListUpdated?.Invoke(this, Rooms);
-        }
+        rooms.TryRemove(RoomId, out _);
+        OnRoomsListUpdated?.Invoke(this, Rooms);
     }
 
     public void JoinRoom(Guid roomId, Guid socketId)
     {
         LeaveRoom(socketId);
 
-        var room = rooms.FirstOrDefault(r => r.Id == roomId);
-        if (room == null)
+        if (!rooms.TryGetValue(roomId, out var room))
         {
             return;
         }
@@ -115,14 +103,14 @@ public class RoomService : IRoomService
 
     public void LeaveRoom(Guid socketId)
     {
-        var rooms = Rooms.Where(x => x.Participants.Any(p => p == socketId)).ToList();
+        var affectedRooms = rooms.Values.Where(x => x.Participants.Any(p => p == socketId)).ToList();
 
-        if (rooms.Count == 0)
+        if (affectedRooms.Count == 0)
         {
             return;
         }
 
-        foreach (var room in rooms)
+        foreach (var room in affectedRooms)
         {
             var participants = room.RoomParticipants.Where(x => x.SocketId == socketId).ToList();
 
@@ -134,26 +122,26 @@ public class RoomService : IRoomService
                     {
                         participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
                     }
-                        
+
                     if (participant.OnSignalingStateChangeHandler != null)
                     {
                         participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
                     }
-                        
+
                     if (participant.OnRtpPacketReceivedHandler != null)
                     {
                         participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
                     }
-                        
+
                     if (participant.OnReceiveReportHandler != null)
                     {
                         participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
                     }
-                        
+
                     if (participant.OnTimeoutHandler != null)
                     {
                         participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
-                    }                       
+                    }
 
                     participant.PeerConnection.Close("Room left");
                     participant.PeerConnection.Dispose();
@@ -165,7 +153,7 @@ public class RoomService : IRoomService
                     participant.OnReceiveReportHandler = null;
                     participant.OnTimeoutHandler = null;
                 }
-                
+
                 room.RoomParticipants.Remove(participant);
             }
 
@@ -178,13 +166,12 @@ public class RoomService : IRoomService
 
     public RTCSessionDescriptionInit HandleOffer(Guid roomId, Guid socketId, string offerJson)
     {
-        var room = Rooms.Where(x => x.Id == roomId).FirstOrDefault();
-        if (room == null)
+        if (!rooms.TryGetValue(roomId, out var room))
         {
             throw new Exception("Room was not found.");
         }
 
-        var participant = room.RoomParticipants.Where(x => x.SocketId == socketId).FirstOrDefault();
+        var participant = room.RoomParticipants.FirstOrDefault(x => x.SocketId == socketId);
         if (participant == null)
         {
             throw new Exception("Participant was not found in this room.");
@@ -250,36 +237,44 @@ public class RoomService : IRoomService
     }
 
     private void Pc_OnRtpPacketReceived(System.Net.IPEndPoint remoteEP, SDPMediaTypesEnum mediaType, RTPPacket rtpPacket, Guid roomId, Guid socketId, RTCPeerConnection pc)
-    {       
-        logger.LogDebug($"Received {mediaType} RTP packet, size: {rtpPacket.Payload.Length} | RoomId: {roomId} | SocketId: {socketId}");
-
-        var room = rooms.Where(x => x.Id == roomId).FirstOrDefault();
-        if (room == null)
+    {
+        if (!rooms.TryGetValue(roomId, out var room))
         {
             return;
         }
 
-        var targets = room.RoomParticipants.Where(x => x.SocketId != socketId);
-
-        foreach (var target in targets)
+        var participants = room.RoomParticipants;
+        if (participants == null || participants.Count == 0)
         {
-            try
-            {
-                if (target.PeerConnection == null)
-                {
-                    continue;
-                }
+            return;
+        }
 
-                if (target.PeerConnection.connectionState == RTCPeerConnectionState.connected)
-                {
-                    target.PeerConnection.SendRtpRaw(mediaType, rtpPacket.Payload, rtpPacket.Header.Timestamp, rtpPacket.Header.MarkerBit, rtpPacket.Header.PayloadType);
-                    logger.LogInformation("packet forwarded");
-                }
-            }
-            catch (Exception ex)
+        var payload = rtpPacket.Payload;
+        var timestamp = rtpPacket.Header.Timestamp;
+        var markerBit = rtpPacket.Header.MarkerBit;
+        var payloadType = rtpPacket.Header.PayloadType;
+
+        for (int i = 0; i < participants.Count; i++)
+        {
+            var target = participants[i];
+
+            if (target.SocketId == socketId)
             {
-                logger.LogWarning(ex, "Could not forward message");
+                continue;
             }
+
+            var targetPc = target.PeerConnection;
+            if (targetPc == null)
+            {
+                continue;
+            }
+
+            if (targetPc.connectionState != RTCPeerConnectionState.connected)
+            {
+                continue;
+            }
+
+            targetPc.SendRtpRaw(mediaType, payload, timestamp, markerBit, payloadType);
         }
     }
 
