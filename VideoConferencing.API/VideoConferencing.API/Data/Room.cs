@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using SIPSorcery.Net;
+using System.Text.Json.Serialization;
 
 namespace VideoConferencing.API.Data;
 
@@ -10,9 +11,24 @@ public class Room
     [JsonPropertyName("participantCount")]
     public int ParticipantCount
     {
-        get => Participants.Count;
+        get => Participants.Count();
     }
 
     [JsonPropertyName("participants")]
-    public List<Guid> Participants { get; set; } = [];
+    public IEnumerable<Guid> Participants
+    {
+        get
+        {
+            return RoomParticipants.Select(x => x.SocketId);
+        }
+    }
+
+    [JsonIgnore]
+    public List<RoomParticipant> RoomParticipants { get; set; } = [];
+}
+
+public class RoomParticipant
+{
+    public Guid SocketId { get; set; }
+    public RTCPeerConnection? PeerConnection { get; set; }
 }

@@ -159,11 +159,11 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
         await SendMessageToAllAsync(message);
     }
 
-    private void _roomService_OnRoomUpdated(object? sender, (List<Guid> SocketIds, Data.Room Room) e)
+    private void _roomService_OnRoomUpdated(object? sender, (IEnumerable<Guid> SocketIds, Data.Room Room) e)
     {
         var (socketIds, room) = e;
 
-        _logger.LogInformation("Sending room update for Room {RoomId} to {SocketCount} clients", room.Id, socketIds.Count);
+        _logger.LogInformation("Sending room update for Room {RoomId} to {SocketCount} clients", room.Id, socketIds.Count());
         var message = new RoomUpdated
         {
             Room = room

@@ -1,4 +1,7 @@
-﻿using SIPSorcery.Net;
+﻿using Microsoft.AspNetCore.Mvc.Formatters;
+using SIPSorcery.Net;
+using SIPSorcery.Sys;
+using System.Net.Sockets;
 using System.Text.Json;
 
 namespace VideoConferencing.API.Services.Room;
@@ -17,7 +20,7 @@ public class RoomService : IRoomService
     }
 
     public event EventHandler<List<Data.Room>>? OnRoomsListUpdated;
-    public event EventHandler<(List<Guid> SocketIds, Data.Room Room)>? OnRoomUpdated;
+    public event EventHandler<(IEnumerable<Guid> SocketIds, Data.Room Room)>? OnRoomUpdated;
     public event EventHandler<Guid>? OnClientRoomLeft;
 
     public RoomService(ILogger<RoomService> logger)
@@ -47,9 +50,26 @@ public class RoomService : IRoomService
             return;
         }
 
-        foreach (var participant in room.Participants)
+        var participants = room.RoomParticipants.ToList();
+
+        foreach (var participant in participants)
         {
-            OnClientRoomLeft?.Invoke(this, participant);
+            if (participant.PeerConnection != null)
+            {
+                participant.PeerConnection.onicecandidate -= Pc_onicecandidate;
+                participant.PeerConnection.onsignalingstatechange -= Pc_onsignalingstatechange;
+                participant.PeerConnection.OnRtpPacketReceived -= Pc_OnRtpPacketReceived;
+                participant.PeerConnection.OnReceiveReport -= Pc_OnReceiveReport;
+                participant.PeerConnection.OnTimeout -= Pc_OnTimeout;
+
+                participant.PeerConnection.Close("Room left");
+                participant.PeerConnection.Dispose();
+                participant.PeerConnection = null;
+            }
+
+            room.RoomParticipants.Remove(participant);
+
+            OnClientRoomLeft?.Invoke(this, participant.SocketId);
         }
 
         if (room != null)
@@ -74,7 +94,11 @@ public class RoomService : IRoomService
             return;
         }
 
-        room.Participants.Add(socketId);
+        room.RoomParticipants.Add(new()
+        {
+            SocketId = socketId,
+            PeerConnection = null
+        });
         OnRoomsListUpdated?.Invoke(this, Rooms);
         OnRoomUpdated?.Invoke(this, (room.Participants, room));
     }
@@ -83,14 +107,33 @@ public class RoomService : IRoomService
     {
         var rooms = Rooms.Where(x => x.Participants.Any(p => p == socketId)).ToList();
 
-        if (!rooms.Any())
+        if (rooms.Count == 0)
         {
             return;
         }
 
         foreach (var room in rooms)
         {
-            room.Participants.Remove(socketId);
+            var participants = room.RoomParticipants.Where(x => x.SocketId == socketId).ToList();
+
+            foreach (var participant in participants)
+            {
+                if (participant.PeerConnection != null)
+                {
+                    participant.PeerConnection.onicecandidate -= Pc_onicecandidate;
+                    participant.PeerConnection.onsignalingstatechange -= Pc_onsignalingstatechange;
+                    participant.PeerConnection.OnRtpPacketReceived -= Pc_OnRtpPacketReceived;
+                    participant.PeerConnection.OnReceiveReport -= Pc_OnReceiveReport;
+                    participant.PeerConnection.OnTimeout -= Pc_OnTimeout;
+
+                    participant.PeerConnection.Close("Room left");
+                    participant.PeerConnection.Dispose();
+                    participant.PeerConnection = null;
+                }
+                
+                room.RoomParticipants.Remove(participant);
+            }
+
             OnRoomUpdated?.Invoke(this, (room.Participants, room));
         }
 
@@ -100,6 +143,18 @@ public class RoomService : IRoomService
 
     public RTCSessionDescriptionInit HandleOffer(Guid roomId, Guid socketId, string offerJson)
     {
+        var room = Rooms.Where(x => x.Id == roomId).FirstOrDefault();
+        if (room == null)
+        {
+            throw new Exception("Room was not found.");
+        }
+
+        var participant = room.RoomParticipants.Where(x => x.SocketId == socketId).FirstOrDefault();
+        if (participant == null)
+        {
+            throw new Exception("Participant was not found in this room.");
+        }
+
         if (string.IsNullOrWhiteSpace(offerJson))
         {
             throw new Exception("OfferJson was empty");
@@ -122,31 +177,11 @@ public class RoomService : IRoomService
         var videoTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
         pc.addTrack(videoTrack);
 
-        pc.onicecandidate += async (candidate) =>
-        {
-            logger.LogInformation($"Server ICE candidate: {candidate.candidate}");
-        };
-
-        pc.onsignalingstatechange += () =>
-        {
-            logger.LogInformation($"Signaling state: {pc.signalingState}");
-        };
-
-        pc.OnRtpPacketReceived += (remoteEP, mediaType, rtpPacket) =>
-        {
-            logger.LogInformation($"Received {mediaType} RTP packet, size: {rtpPacket.Payload.Length}");
-        };
-
-        pc.OnReceiveReport += (remoteEP, mediaType, rtcpReport) =>
-        {
-            logger.LogInformation($"Received RTCP report from type: {mediaType}");
-        };
-
-        pc.OnTimeout += (mediaType) =>
-        {
-            logger.LogWarning($"Timeout on for {mediaType}");
-        };
-
+        pc.onicecandidate += Pc_onicecandidate;
+        pc.onsignalingstatechange += Pc_onsignalingstatechange;
+        pc.OnRtpPacketReceived += Pc_OnRtpPacketReceived;
+        pc.OnReceiveReport += Pc_OnReceiveReport;
+        pc.OnTimeout += Pc_OnTimeout;
 
         var result = pc.setRemoteDescription(offer);
         if (result != SIPSorcery.Net.SetDescriptionResultEnum.OK)
@@ -157,7 +192,34 @@ public class RoomService : IRoomService
         var answer = pc.createAnswer();
         pc.setLocalDescription(answer);
 
+        participant.PeerConnection = pc;
+
         return answer;
+    }
+
+    private void Pc_OnTimeout(SDPMediaTypesEnum mediaType)
+    {
+        logger.LogWarning($"Timeout on for {mediaType}");
+    }
+
+    private void Pc_OnReceiveReport(System.Net.IPEndPoint remoteEP, SDPMediaTypesEnum mediaType, RTCPCompoundPacket rtcpReport)
+    {
+        logger.LogInformation($"Received RTCP report from type: {mediaType}");
+    }
+
+    private void Pc_OnRtpPacketReceived(System.Net.IPEndPoint remoteEP, SDPMediaTypesEnum mediaType, RTPPacket rtpPacket)
+    {
+        logger.LogInformation($"Received {mediaType} RTP packet, size: {rtpPacket.Payload.Length}");
+    }
+
+    private void Pc_onsignalingstatechange()
+    {
+        logger.LogInformation($"Signaling state change for a pc? No sender here though.");
+    }
+
+    private void Pc_onicecandidate(RTCIceCandidate candidate)
+    {
+        logger.LogInformation($"Server ICE candidate: {candidate.candidate}");
     }
 
     private static RTCSessionDescriptionInit ParseOfferJson(string offerJson)

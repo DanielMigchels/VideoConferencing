@@ -55,7 +55,6 @@ export class VideoConferencingWebSocketService {
     this.sendMessage(JSON.stringify(message));
   }
 
-  
   sendOffer( roomId: string, offer: RTCSessionDescriptionInit) {
     const message: SendOffer = {
       type: 'sendOffer',

@@ -5,7 +5,7 @@ namespace VideoConferencing.API.Services.Room;
 public interface IRoomService
 {
     public event EventHandler<List<Data.Room>>? OnRoomsListUpdated;
-    public event EventHandler<(List<Guid> SocketIds, Data.Room Room)>? OnRoomUpdated;
+    public event EventHandler<(IEnumerable<Guid> SocketIds, Data.Room Room)>? OnRoomUpdated;
     public event EventHandler<Guid>? OnClientRoomLeft;
     public List<Data.Room> Rooms { get; }
     public Data.Room AddRoom();

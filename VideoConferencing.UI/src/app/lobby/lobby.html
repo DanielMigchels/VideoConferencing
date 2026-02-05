@@ -7,18 +7,20 @@
       <div class="w-full overflow-auto text-[#4c4c4c]">
         <div class="w-full min-h-full flex justify-center p-4">
           <div class="flex flex-wrap justify-center gap-4 w-full max-w-7xl">
-            <div *ngFor="let participant of joinedRoom.participants"
-              class="flex-[0_0_100%] sm:flex-[0_0_48%] lg:flex-[0_0_32%] aspect-video bg-[#181818] rounded-xl flex items-center justify-center text-white text-xl max-w-none lg:max-w-md xl:max-w-lg">
 
-            </div>
-
-            <div
-              class="flex-[0_0_100%] sm:flex-[0_0_48%] lg:flex-[0_0_32%]  bg-[#181818] rounded-xl flex items-center justify-center text-white text-xl max-w-none lg:max-w-md xl:max-w-lg">
-              <video #localVideo autoplay playsinline muted class="w-full h-full object-cover rounded"></video>
-            </div>
             <!--
-            
+            <div class="w-96 aspect-video bg-[#181818] rounded">
+              <video class="w-full h-full object-cover rounded"></video>
+            </div>            
             -->
+
+            <div class="w-96 aspect-video bg-[#181818] rounded relative">
+              <div class="absolute inset-0 flex justify-center items-center">
+                <app-loader class="w-full"></app-loader>
+              </div>
+              <video #localVideo autoplay playsinline muted class=" absolute w-full h-full object-contain rounded"></video>
+            </div>
+
           </div>
         </div>
       </div>
