@@ -13,13 +13,14 @@ public class RoomService : IRoomService
     {
         get
         {
-            return rooms.Values.ToList();
+            return [.. rooms.Values];
         }
     }
 
     public event EventHandler<List<Data.Room>>? OnRoomsListUpdated;
     public event EventHandler<Data.Room>? OnRoomUpdated;
     public event EventHandler<Guid>? OnClientRoomLeft;
+    public event EventHandler<(Guid SocketId, RTCSessionDescriptionInit Answer)> OnRenegotiation;
 
     public RoomService(ILogger<RoomService> logger)
     {
@@ -164,7 +165,7 @@ public class RoomService : IRoomService
         OnClientRoomLeft?.Invoke(this, socketId);
     }
 
-    public RTCSessionDescriptionInit HandleOffer(Guid roomId, Guid socketId, string offerJson)
+    public void CreatePeerConnection(Guid roomId, Guid socketId, string offerJson)
     {
         if (!rooms.TryGetValue(roomId, out var room))
         {
@@ -198,7 +199,7 @@ public class RoomService : IRoomService
         var vp8Format = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 96, "VP8", 90000);
         var videoTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
         pc.addTrack(videoTrack);
-
+        
         var result = pc.setRemoteDescription(offer);
         if (result != SIPSorcery.Net.SetDescriptionResultEnum.OK)
         {
@@ -222,7 +223,21 @@ public class RoomService : IRoomService
 
         participant.PeerConnection = pc;
 
-        return answer;
+        foreach (var existingParticipant in room.Participants.Where(p => p.SocketId != socketId))
+        {
+
+            if (existingParticipant.PeerConnection == null)
+            {
+                continue;
+            }
+
+            var existingOffer = existingParticipant.PeerConnection.createOffer();
+            existingParticipant.PeerConnection.setLocalDescription(existingOffer);
+
+            OnRenegotiation?.Invoke(this, (existingParticipant.SocketId, existingOffer));
+        }
+
+        OnRenegotiation?.Invoke(this, (participant.SocketId, answer));
     }
 
     private void Pc_OnTimeout(SDPMediaTypesEnum mediaType, Guid roomId, Guid socketId, RTCPeerConnection pc)

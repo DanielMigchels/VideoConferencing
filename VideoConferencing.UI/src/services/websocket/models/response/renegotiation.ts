@@ -1,6 +1,6 @@
 import { WebsocketMessage } from "../../generic/models/websocket-message";
 
-export interface OfferProcessed extends WebsocketMessage {
+export interface Renegotiation extends WebsocketMessage {
   sdp: string;
   answerType: string;
 }

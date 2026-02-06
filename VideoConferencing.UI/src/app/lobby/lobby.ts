@@ -1,9 +1,9 @@
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule } from "@angular/common";
+import { Component, ElementRef, OnInit, ViewChild } from "@angular/core";
 import { NgIconComponent } from "@ng-icons/core";
-import { VideoConferencingWebSocketService } from '../../services/websocket/video-conferencing-web-socket.service';
-import { Room } from '../../data/room';
 import { Loader } from "../../components/loader/loader";
+import { Room } from "../../data/room";
+import { VideoConferencingWebSocketService } from "../../services/websocket/video-conferencing-web-socket.service";
 
 @Component({
   selector: 'app-lobby',
@@ -24,23 +24,26 @@ export class Lobby implements OnInit {
       this.rooms = x.rooms;
     });
 
-    this.ws.getRoomUpdated().subscribe(async x => {
-      if (this.joinedRoom === null) {
-        this.joinedRoom = x.room;
+    this.ws.getRoomUpdated().subscribe(async (x) => {
+      const wasNotJoined = this.joinedRoom === null;
+      this.joinedRoom = x.room;
+
+      if (wasNotJoined && this.joinedRoom !== null) {
         this.startVideo();
-      }
-      else {
-        this.joinedRoom = x.room;
       }
     });
 
-    this.ws.getOfferProcessed().subscribe(async x => {
-      await this.offerProcessed(x.sdp, x.answerType as RTCSdpType);
+    this.ws.getRenegotiation().subscribe(async x => {
+      await this.handleRenegotiation(x.sdp, x.answerType as RTCSdpType);
     });
   }
 
   addRoom() {
     this.ws.addRoom();
+  }
+
+  deleteRoom(roomId: string) {
+    this.ws.deleteRoom(roomId);
   }
 
   joinRoom(roomId: string) {
@@ -56,29 +59,21 @@ export class Lobby implements OnInit {
     this.ws.leaveRoom();
   }
 
-  deleteRoom(roomId: string) {
-    this.ws.deleteRoom(roomId);
-  }
-
-  localStream?: MediaStream | null;
-  @ViewChild('localVideo') localVideo?: ElementRef<HTMLVideoElement>;
-  @ViewChild('remoteVideo') remoteVideo?: ElementRef<HTMLVideoElement>;
-  private localPeerConnection: RTCPeerConnection | null = null;
-  private readonly configuration: RTCConfiguration = {};
-  remoteParticipant?: MediaStream;
+  localMediaStream?: MediaStream | null;
+  @ViewChild('localVideo') localVideoElement?: ElementRef<HTMLVideoElement>;
+  
+  private peerConnection: RTCPeerConnection | null = null;
 
   async startVideo() {
     if (this.joinedRoom === null) {
       return;
     }
 
-    if (this.localStream) {
-      this.stopVideo();
+    if (this.peerConnection) {
+      return
     }
 
-    console.log('Starting local video...');
-
-    this.localStream = await navigator.mediaDevices.getUserMedia({
+    this.localMediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         width: { ideal: 1280 },
         height: { ideal: 720 },
@@ -91,50 +86,31 @@ export class Lobby implements OnInit {
       }
     });
 
-    const videoOnlyStream = new MediaStream(
-      this.localStream.getVideoTracks()
-    );
+    this.peerConnection = new RTCPeerConnection({});
+    this.localVideoElement!.nativeElement.srcObject = new MediaStream(this.localMediaStream.getVideoTracks());;
 
-    if (this.localVideo) {
-      this.localVideo.nativeElement.srcObject = videoOnlyStream;
-    }
-
-    this.localPeerConnection = new RTCPeerConnection(this.configuration);
-
-    this.localStream.getTracks().forEach(track => {
-      this.localPeerConnection!.addTrack(track, this.localStream!);
+    this.localMediaStream.getTracks().forEach(track => {
+      this.peerConnection!.addTrack(track, this.localMediaStream!);
     });
 
-    this.localPeerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        console.log('New ICE candidate:', event.candidate);
-      }
-    };
-
-    this.localPeerConnection.ontrack = (event) => {
-      console.log('Received remote track:', event.streams);
+    this.peerConnection.ontrack = (event) => {
+      console.log('Received remote track:', event.track);
       const remoteStream = event.streams[0];
 
-      this.remoteParticipant = remoteStream;
-
-      if (this.remoteVideo) {
-        this.remoteVideo.nativeElement.srcObject = remoteStream;
-      }
+      event.track.onended = () => {
+        console.log('Remote track ended:', event.track);
+      };
     };
 
-    this.localPeerConnection.onconnectionstatechange = () => {
-      console.log('Connection state change:', this.localPeerConnection!.connectionState);
-    };
+    const offer = await this.peerConnection!.createOffer();
+    await this.peerConnection!.setLocalDescription(offer);
 
-    const offer = await this.localPeerConnection!.createOffer();
-    await this.localPeerConnection!.setLocalDescription(offer);
-    console.log('Send offer...');
-    this.ws.sendOffer(this.joinedRoom!.id, offer);
+    this.ws.createPeerConnection(this.joinedRoom!.id, offer);
   }
 
-  async offerProcessed(sdp: string, answerType: RTCSdpType): Promise<void> {
-    if (!this.localPeerConnection) {
-      throw new Error("PeerConnection not initialized");
+  async handleRenegotiation(sdp: string, answerType: RTCSdpType) {
+    if (this.peerConnection === null) {
+      return;
     }
 
     const description: RTCSessionDescriptionInit = {
@@ -142,18 +118,18 @@ export class Lobby implements OnInit {
       type: answerType,
     };
 
-    await this.localPeerConnection.setRemoteDescription(description);
+    await this.peerConnection.setRemoteDescription(description);
+
+    console.log('Set remote description for renegotiation:', description);
 
     this.ws.requestKeyframe(this.joinedRoom!.id);
   }
 
-  async stopVideo() {
-    console.log('Stopping local video...');
+  stopVideo() {
+    this.localMediaStream?.getTracks().forEach(track => track.stop());
+    this.localMediaStream = null;
 
-    this.localPeerConnection?.close();
-    this.localPeerConnection = null;
-
-    this.localStream?.getTracks().forEach(track => track.stop());
-    this.localStream = null;
+    this.peerConnection?.close();
+    this.peerConnection = null;
   }
 }

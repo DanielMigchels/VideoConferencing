@@ -8,8 +8,8 @@ import { RoomListUpdated } from './models/response/rooms-list-updated';
 import { JoinRoom } from './models/request/join-room';
 import { LeaveRoom } from './models/request/leave-room';
 import { RoomUpdated } from './models/response/room-updated';
-import { SendOffer } from './models/request/send-offer';
-import { OfferProcessed } from './models/response/offer-processed';
+import { CreatePeerConnection } from './models/request/start-negotiation';
+import { Renegotiation } from './models/response/renegotiation';
 
 @Injectable({
   providedIn: 'root',
@@ -19,7 +19,7 @@ export class VideoConferencingWebSocketService {
   private connected = new Subject<void>();
   private getRoomListUpdatedSubject = new Subject<RoomListUpdated>();
   private getRoomUpdatedSubject = new Subject<RoomUpdated>();
-  private getOfferProcessedSubject = new Subject<OfferProcessed>();
+  private getRenegotiationSubject = new Subject<Renegotiation>();
 
   constructor() {
     this.connect();
@@ -55,11 +55,11 @@ export class VideoConferencingWebSocketService {
     this.sendMessage(JSON.stringify(message));
   }
 
-  sendOffer( roomId: string, offer: RTCSessionDescriptionInit) {
-    const message: SendOffer = {
-      type: 'sendOffer',
+  createPeerConnection( roomId: string, sessionDescription: RTCSessionDescriptionInit) {
+    const message: CreatePeerConnection = {
+      type: 'createPeerConnection',
       roomId: roomId,
-      offer: offer
+      sessionDescription: sessionDescription
     };
     this.sendMessage(JSON.stringify(message));
   }
@@ -76,8 +76,8 @@ export class VideoConferencingWebSocketService {
     return this.getRoomUpdatedSubject.asObservable();
   }
 
-  getOfferProcessed(): Observable<OfferProcessed> {
-    return this.getOfferProcessedSubject.asObservable();
+  getRenegotiation(): Observable<Renegotiation> {
+    return this.getRenegotiationSubject.asObservable();
   }
 
   private connect(): void {
@@ -86,19 +86,16 @@ export class VideoConferencingWebSocketService {
       const wsProtocol = isSecure ? "wss" : "ws";
 
       const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
-      console.log('Connecting to WebSocket:', wsUrl);
       this.socket = new WebSocket(wsUrl);
   
       this.socket.onopen = () => {
-        console.log('WebSocket connected to', wsUrl);
         this.connected.next();
       };
       this.socket.onmessage = (event) => this.handleMessage(event.data);
       this.socket.onclose = () => {
-        console.log('WebSocket disconnected, refreshing webpage...');
         window.location.reload();
       };
-      this.socket.onerror = (error) => console.error('WebSocket error:', error);
+      this.socket.onerror = (error) => { }
     }
   } 
   
@@ -112,8 +109,8 @@ export class VideoConferencingWebSocketService {
       else if (isMessageOfType<RoomUpdated>(message, 'roomUpdated')) {
         this.handleRoomUpdated(message);
       } 
-      else if (isMessageOfType<OfferProcessed>(message, 'offerProcessed')) {
-        this.handleOfferProcessed(message);
+      else if (isMessageOfType<Renegotiation>(message, 'renegotiation')) {
+        this.handleRenegotiation(message);
       }
       else {
         console.warn('Received unknown message type:', message.type);
@@ -124,18 +121,15 @@ export class VideoConferencingWebSocketService {
   }
 
   handleRoomUpdated(message: RoomUpdated) {
-    console.log('Joined room updated:', message.room);
     this.getRoomUpdatedSubject.next(message);
   }
 
   private handleRoomListUpdated(message: RoomListUpdated): void {
-    console.log('Room list updated:', message.rooms);
     this.getRoomListUpdatedSubject.next(message);
   }
 
-  handleOfferProcessed(message: OfferProcessed) {
-    console.log('Offer processed:', message);
-    this.getOfferProcessedSubject.next(message);
+  handleRenegotiation(message: Renegotiation) {
+    this.getRenegotiationSubject.next(message);
   }
 
   private sendMessage(message: string): void {

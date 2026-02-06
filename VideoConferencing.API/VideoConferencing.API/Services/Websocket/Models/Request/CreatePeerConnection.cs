@@ -3,10 +3,10 @@ using VideoConferencing.API.Services.Websocket.Generic.Models;
 
 namespace VideoConferencing.API.Services.Websocket.Models.Request;
 
-public class SendOffer : WebsocketMessage
+public class CreatePeerConnection : WebsocketMessage
 {
-    [JsonPropertyName("offer")]
-    public required object Offer { get; set; }
+    [JsonPropertyName("sessionDescription")]
+    public required object SessionDescription { get; set; }
 
     [JsonPropertyName("roomId")]
     public Guid RoomId { get; set; }

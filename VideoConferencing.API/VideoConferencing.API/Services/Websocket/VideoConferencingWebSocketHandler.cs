@@ -1,4 +1,6 @@
-﻿using VideoConferencing.API.Services.Room;
+﻿using SIPSorcery.Net;
+using System.Net.Sockets;
+using VideoConferencing.API.Services.Room;
 using VideoConferencing.API.Services.Websocket.Generic;
 using VideoConferencing.API.Services.Websocket.Generic.Models;
 using VideoConferencing.API.Services.Websocket.Models.Request;
@@ -22,6 +24,7 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
         _roomService.OnRoomsListUpdated += OnRoomsListUpdatedHandler;
         _roomService.OnRoomUpdated += _roomService_OnRoomUpdated;
         _roomService.OnClientRoomLeft += _roomService_OnClientRoomLeft;
+        _roomService.OnRenegotiation += _roomService_OnRenegotiation;
     }
 
     private void VideoConferencingWebSocketHandler_OnClose(object? sender, Guid socketId)
@@ -63,8 +66,8 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
                 case DeleteRoom deleteRoom:
                     await DeleteRoomAsync(socketId, deleteRoom);
                     break;
-                case SendOffer sendOffer:
-                    await SendOfferAsync(socketId, sendOffer);
+                case CreatePeerConnection createPeerConnection:
+                    await CreatePeerConnectionAsync(socketId, createPeerConnection);
                     break;
                 case RequestKeyframe requestKeyframe:
                     await RequestKeyFrameAsync(socketId, requestKeyframe);
@@ -149,17 +152,22 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
         await Task.CompletedTask;
     }
 
-    private async Task SendOfferAsync(Guid socketId, SendOffer sendOffer)
+    private async Task CreatePeerConnectionAsync(Guid socketId, CreatePeerConnection startNegotiation)
     {
-        var answer = _roomService.HandleOffer(sendOffer.RoomId, socketId, sendOffer.Offer.ToString() ?? string.Empty);
+        _roomService.CreatePeerConnection(startNegotiation.RoomId, socketId, startNegotiation.SessionDescription.ToString() ?? string.Empty);
 
-        var message = new OfferProcessed
+        await Task.CompletedTask;
+    }
+
+    private async void _roomService_OnRenegotiation(object? sender, (Guid SocketId, RTCSessionDescriptionInit Answer) e)
+    {
+        var message = new Renegotiation
         {
-            Sdp = answer.sdp,
-            AnswerType = answer.type.ToString().ToLower()
+            Sdp = e.Answer.sdp,
+            AnswerType = e.Answer.type.ToString().ToLower()
         };
 
-        _ = SendMessage(socketId, message);
+        _ = SendMessage(e.SocketId, message);
 
         await Task.CompletedTask;
     }

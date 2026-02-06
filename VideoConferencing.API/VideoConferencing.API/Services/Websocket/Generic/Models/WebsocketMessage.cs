@@ -11,8 +11,8 @@ namespace VideoConferencing.API.Services.Websocket.Generic.Models;
 [JsonDerivedType(typeof(LeaveRoom), typeDiscriminator: "leaveRoom")]
 [JsonDerivedType(typeof(RoomListUpdated), typeDiscriminator: "roomListUpdated")]
 [JsonDerivedType(typeof(RoomUpdated), typeDiscriminator: "roomUpdated")]
-[JsonDerivedType(typeof(SendOffer), typeDiscriminator: "sendOffer")]
-[JsonDerivedType(typeof(OfferProcessed), typeDiscriminator: "offerProcessed")]
+[JsonDerivedType(typeof(CreatePeerConnection), typeDiscriminator: "createPeerConnection")]
+[JsonDerivedType(typeof(Renegotiation), typeDiscriminator: "renegotiation")]
 [JsonDerivedType(typeof(RequestKeyframe), typeDiscriminator: "requestKeyframe")]
 public abstract class WebsocketMessage
 {
