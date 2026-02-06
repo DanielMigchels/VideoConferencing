@@ -12,5 +12,6 @@ public interface IRoomService
     public void DeleteRoom(Guid RoomId);
     public void JoinRoom(Guid roomId, Guid socketId);
     public void LeaveRoom(Guid socketId);
+    public void RequestKeyframes(Guid roomId, Guid socketId);
     public RTCSessionDescriptionInit HandleOffer(Guid roomId, Guid socketId, string offer);
 }

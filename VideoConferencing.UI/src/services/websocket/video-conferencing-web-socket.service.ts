@@ -145,4 +145,12 @@ export class VideoConferencingWebSocketService {
       console.error('WebSocket is not connected. Cannot send message.');
     }
   }
+  
+  requestKeyframe(id: string) {
+    const message = {
+      type: 'requestKeyframe',
+      roomId: id
+    };
+    this.sendMessage(JSON.stringify(message));
+  }
 }

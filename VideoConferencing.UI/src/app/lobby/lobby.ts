@@ -147,6 +147,8 @@ export class Lobby implements OnInit {
     };
 
     await this.localPeerConnection.setRemoteDescription(description);
+
+    this.ws.requestKeyframe(this.joinedRoom!.id);
   }
 
   async stopVideo() {

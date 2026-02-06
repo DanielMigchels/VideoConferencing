@@ -222,12 +222,6 @@ public class RoomService : IRoomService
 
         participant.PeerConnection = pc;
 
-        Task.Run(async () =>
-        {
-            await Task.Delay(300);
-            RequestKeyframesForNewParticipant(roomId, socketId);
-        });
-
         return answer;
     }
 
@@ -325,8 +319,10 @@ public class RoomService : IRoomService
         }
     }
 
-    private void RequestKeyframesForNewParticipant(Guid roomId, Guid newParticipantId)
+    public void RequestKeyframes(Guid roomId, Guid socketId)
     {
+        logger.LogInformation($"Requesting keyframes for new participant | RoomId: {roomId} | SocketId: {socketId}");
+
         if (!rooms.TryGetValue(roomId, out var room))
         {
             return;
@@ -334,7 +330,7 @@ public class RoomService : IRoomService
 
         foreach (var participant in room.RoomParticipants)
         {
-            if (participant.SocketId != newParticipantId)
+            if (participant.SocketId != socketId)
             {
                 RequestKeyframeFrom(participant.SocketId);
             }

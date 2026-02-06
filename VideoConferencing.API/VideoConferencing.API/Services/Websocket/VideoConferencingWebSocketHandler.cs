@@ -69,6 +69,9 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
                 case SendOffer sendOffer:
                     await SendOfferAsync(socketId, sendOffer);
                     break;
+                case RequestKeyframe requestKeyframe:
+                    await RequestKeyFrameAsync(socketId, requestKeyframe);
+                    break;
                 default:
                     _logger.LogWarning("Unknown message type received for socket {SocketId}", socketId);
                     break;
@@ -78,6 +81,23 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
         {
             _logger.LogError(ex, "Error processing message for socket {SocketId}", socketId);
         }
+    }
+
+    private async Task RequestKeyFrameAsync(Guid socketId, RequestKeyframe requestKeyframe)
+    {
+        if (requestKeyframe is null)
+        {
+            _logger.LogWarning("RequestKeyFrameAsync message was null for socket {SocketId}", socketId);
+            return;
+        }
+
+        await Task.Run(async () =>
+        {
+            await Task.Delay(300);
+            _roomService.RequestKeyframes(requestKeyframe.RoomId, socketId);
+        });
+
+        await Task.CompletedTask;
     }
 
     private async Task LeaveRoomAsync(Guid socketId, LeaveRoom leaveRoom)
