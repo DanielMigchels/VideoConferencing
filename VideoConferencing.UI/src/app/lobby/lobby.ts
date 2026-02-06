@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { NgIconComponent } from "@ng-icons/core";
 import { VideoConferencingWebSocketService } from '../../services/websocket/video-conferencing-web-socket.service';
 import { Room } from '../../data/room';
-import { every } from 'rxjs';
 import { Loader } from "../../components/loader/loader";
 
 @Component({

@@ -1,5 +1,4 @@
-﻿using VideoConferencing.API.Data;
-using VideoConferencing.API.Services.Room;
+﻿using VideoConferencing.API.Services.Room;
 using VideoConferencing.API.Services.Websocket.Generic;
 using VideoConferencing.API.Services.Websocket.Generic.Models;
 using VideoConferencing.API.Services.Websocket.Models.Request;
@@ -179,19 +178,17 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
         await SendMessageToAllAsync(message);
     }
 
-    private void _roomService_OnRoomUpdated(object? sender, (IEnumerable<Guid> SocketIds, Data.Room Room) e)
+    private void _roomService_OnRoomUpdated(object? sender, Data.Room room)
     {
-        var (socketIds, room) = e;
-
-        _logger.LogInformation("Sending room update for Room {RoomId} to {SocketCount} clients", room.Id, socketIds.Count());
+        _logger.LogInformation("Sending room update for Room {RoomId} to {SocketCount} clients", room.Id, room.Participants.Count());
         var message = new RoomUpdated
         {
             Room = room
         };
 
-        foreach (var socketId in socketIds)
+        foreach (var participant in room.Participants)
         {
-            _ = SendMessage(socketId, message);
+            _ = SendMessage(participant.SocketId, message);
         }
     }
 

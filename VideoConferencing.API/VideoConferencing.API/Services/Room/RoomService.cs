@@ -18,7 +18,7 @@ public class RoomService : IRoomService
     }
 
     public event EventHandler<List<Data.Room>>? OnRoomsListUpdated;
-    public event EventHandler<(IEnumerable<Guid> SocketIds, Data.Room Room)>? OnRoomUpdated;
+    public event EventHandler<Data.Room>? OnRoomUpdated;
     public event EventHandler<Guid>? OnClientRoomLeft;
 
     public RoomService(ILogger<RoomService> logger)
@@ -46,7 +46,7 @@ public class RoomService : IRoomService
             return;
         }
 
-        var participants = room.RoomParticipants.ToList();
+        var participants = room.Participants.ToList();
 
         foreach (var participant in participants)
         {
@@ -69,7 +69,7 @@ public class RoomService : IRoomService
                 participant.OnTimeoutHandler = null;
             }
 
-            room.RoomParticipants.Remove(participant);
+            room.Participants.Remove(participant);
 
             OnClientRoomLeft?.Invoke(this, participant.SocketId);
         }
@@ -87,23 +87,23 @@ public class RoomService : IRoomService
             return;
         }
 
-        if (room.Participants.Any(x => x == socketId))
+        if (room.Participants.Any(x => x.SocketId == socketId))
         {
             return;
         }
 
-        room.RoomParticipants.Add(new()
+        room.Participants.Add(new()
         {
             SocketId = socketId,
             PeerConnection = null
         });
         OnRoomsListUpdated?.Invoke(this, Rooms);
-        OnRoomUpdated?.Invoke(this, (room.Participants, room));
+        OnRoomUpdated?.Invoke(this, room);
     }
 
     public void LeaveRoom(Guid socketId)
     {
-        var affectedRooms = rooms.Values.Where(x => x.Participants.Any(p => p == socketId)).ToList();
+        var affectedRooms = rooms.Values.Where(x => x.Participants.Any(p => p.SocketId == socketId)).ToList();
 
         if (affectedRooms.Count == 0)
         {
@@ -112,7 +112,7 @@ public class RoomService : IRoomService
 
         foreach (var room in affectedRooms)
         {
-            var participants = room.RoomParticipants.Where(x => x.SocketId == socketId).ToList();
+            var participants = room.Participants.Where(x => x.SocketId == socketId).ToList();
 
             foreach (var participant in participants)
             {
@@ -154,10 +154,10 @@ public class RoomService : IRoomService
                     participant.OnTimeoutHandler = null;
                 }
 
-                room.RoomParticipants.Remove(participant);
+                room.Participants.Remove(participant);
             }
 
-            OnRoomUpdated?.Invoke(this, (room.Participants, room));
+            OnRoomUpdated?.Invoke(this, room);
         }
 
         OnRoomsListUpdated?.Invoke(this, Rooms);
@@ -171,7 +171,7 @@ public class RoomService : IRoomService
             throw new Exception("Room was not found.");
         }
 
-        var participant = room.RoomParticipants.FirstOrDefault(x => x.SocketId == socketId);
+        var participant = room.Participants.FirstOrDefault(x => x.SocketId == socketId);
         if (participant == null)
         {
             throw new Exception("Participant was not found in this room.");
@@ -242,8 +242,8 @@ public class RoomService : IRoomService
             return;
         }
 
-        var participants = room.RoomParticipants;
-        if (participants == null || participants.Count == 0)
+        var participants = room.Participants;
+        if (participants == null || participants.Count() == 0)
         {
             return;
         }
@@ -258,9 +258,9 @@ public class RoomService : IRoomService
         var markerBit = rtpPacket.Header.MarkerBit;
         var payloadType = rtpPacket.Header.PayloadType;
 
-        for (int i = 0; i < participants.Count; i++)
+        for (int i = 0; i < participants.Count(); i++)
         {
-            var target = participants[i];
+            var target = participants.ElementAt(i);
 
             if (target.SocketId == socketId)
             {
@@ -294,14 +294,14 @@ public class RoomService : IRoomService
 
     private void RequestKeyframeFrom(Guid participantId)
     {
-        if (!rooms.Values.Any(r => r.RoomParticipants.Any(p => p.SocketId == participantId && p.Ssrc != 0)))
+        if (!rooms.Values.Any(r => r.Participants.Any(p => p.SocketId == participantId && p.Ssrc != 0)))
         {
             return;
         }
 
         foreach (var room in rooms.Values)
         {
-            var participant = room.RoomParticipants.FirstOrDefault(p => p.SocketId == participantId);
+            var participant = room.Participants.FirstOrDefault(p => p.SocketId == participantId);
             if (participant?.PeerConnection != null && participant.PeerConnection.connectionState == RTCPeerConnectionState.connected)
             {
                 try
@@ -328,7 +328,7 @@ public class RoomService : IRoomService
             return;
         }
 
-        foreach (var participant in room.RoomParticipants)
+        foreach (var participant in room.Participants)
         {
             if (participant.SocketId != socketId)
             {
