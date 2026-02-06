@@ -169,7 +169,7 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
     private async void OnRoomsListUpdatedHandler(object? sender, List<Data.Room> rooms)
     {
         _logger.LogInformation("Broadcasting rooms update to all clients. Total rooms: {RoomCount}", rooms.Count);
-        
+
         var message = new RoomListUpdated
         {
             Rooms = rooms
@@ -181,13 +181,20 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
     private void _roomService_OnRoomUpdated(object? sender, Data.Room room)
     {
         _logger.LogInformation("Sending room update for Room {RoomId} to {SocketCount} clients", room.Id, room.Participants.Count());
-        var message = new RoomUpdated
-        {
-            Room = room
-        };
 
         foreach (var participant in room.Participants)
         {
+            var parsedRoom = new Data.Room()
+            {
+                Id = room.Id,
+                Participants = [.. room.Participants.Where(x => participant.SocketId != x.SocketId)]
+            };
+
+            var message = new RoomUpdated
+            {
+                Room = parsedRoom
+            };
+
             _ = SendMessage(participant.SocketId, message);
         }
     }

@@ -8,11 +8,11 @@
         <div class="w-full min-h-full flex justify-center p-4">
           <div class="flex flex-wrap justify-center gap-4 w-full max-w-7xl">
 
-            <div class="w-96 aspect-video bg-[#181818] rounded relative">
+            <div *ngFor="let participant of joinedRoom.participants" class="w-96 aspect-video bg-[#181818] rounded relative">
               <div class="absolute inset-0 flex justify-center items-center">
                 <app-loader class="w-full"></app-loader>
               </div>
-              <video #remoteVideo autoplay playsinline class=" absolute w-full h-full object-contain rounded"></video>
+              <video autoplay playsinline class=" absolute w-full h-full object-contain rounded"></video>
             </div>
 
             <div class="w-96 aspect-video bg-[#181818] rounded relative">
