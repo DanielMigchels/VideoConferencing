@@ -11,9 +11,7 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
     private readonly ILogger<VideoConferencingWebSocketHandler> _logger;
     private readonly IRoomService _roomService;
 
-    public VideoConferencingWebSocketHandler(
-        ILogger<VideoConferencingWebSocketHandler> logger,
-        IRoomService roomService)
+    public VideoConferencingWebSocketHandler(ILogger<VideoConferencingWebSocketHandler> logger, IRoomService roomService)
     {
         _logger = logger;
         _roomService = roomService;

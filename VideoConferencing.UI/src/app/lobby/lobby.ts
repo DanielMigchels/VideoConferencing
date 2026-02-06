@@ -60,9 +60,6 @@ export class Lobby implements OnInit {
     this.ws.deleteRoom(roomId);
   }
 
-
-
-
   localStream?: MediaStream | null;
   @ViewChild('localVideo') localVideo?: ElementRef<HTMLVideoElement>;
   @ViewChild('remoteVideo') remoteVideo?: ElementRef<HTMLVideoElement>;
