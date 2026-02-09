@@ -1,4 +1,5 @@
 ﻿using SIPSorcery.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Serialization;
 
 namespace VideoConferencing.API.Data;
@@ -23,6 +24,9 @@ public class Participant
 {
     [JsonPropertyName("socketId")]
     public Guid SocketId { get; set; }
+
+    [JsonIgnore]
+    public List<MediaStreamTrack> Tracks { get; set; } = [];
 
     [JsonIgnore]
     public RTCPeerConnection? PeerConnection { get; set; }

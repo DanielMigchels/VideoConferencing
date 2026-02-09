@@ -20,7 +20,7 @@ public class RoomService : IRoomService
     public event EventHandler<List<Data.Room>>? OnRoomsListUpdated;
     public event EventHandler<Data.Room>? OnRoomUpdated;
     public event EventHandler<Guid>? OnClientRoomLeft;
-    public event EventHandler<(Guid SocketId, RTCSessionDescriptionInit Answer)> OnRenegotiation;
+    public event EventHandler<(Guid SocketId, RTCSessionDescriptionInit Answer)>? OnRenegotiation;
 
     public RoomService(ILogger<RoomService> logger)
     {
@@ -125,7 +125,16 @@ public class RoomService : IRoomService
                     participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
                     participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
 
-                    participant.PeerConnection.Close("Room left");
+                    try
+                    {
+                        participant.PeerConnection.Close("Room left");
+                    }
+                    catch
+                    {
+
+                    }
+
+
                     participant.PeerConnection.Dispose();
                     participant.PeerConnection = null;
 
@@ -146,7 +155,7 @@ public class RoomService : IRoomService
         OnClientRoomLeft?.Invoke(this, socketId);
     }
 
-    public void CreatePeerConnection(Guid roomId, Guid socketId, string offerJson)
+    public async Task CreatePeerConnection(Guid roomId, Guid socketId, string offerJson)
     {
         if (!rooms.TryGetValue(roomId, out var room))
         {
@@ -173,14 +182,19 @@ public class RoomService : IRoomService
 
         participant.PeerConnection = new RTCPeerConnection(config);
 
-        var opusFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 111, "opus", 48000, 2);
-        var pcmuFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 0, "PCMU", 8000);
-        var audioTrack = new MediaStreamTrack(SDPMediaTypesEnum.audio, false, new List<SDPAudioVideoMediaFormat> { opusFormat, pcmuFormat }, MediaStreamStatusEnum.SendRecv);
-        participant.PeerConnection.addTrack(audioTrack);
+        for (int i = 0; i < 5; i++)
+        {
+            var opusFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 111, "opus", 48000, 2);
+            var pcmuFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 0, "PCMU", 8000);
+            var audioTrack = new MediaStreamTrack(SDPMediaTypesEnum.audio, false, new List<SDPAudioVideoMediaFormat> { opusFormat, pcmuFormat }, MediaStreamStatusEnum.SendRecv);
+            participant.Tracks.Add(audioTrack);
+            participant.PeerConnection.addTrack(audioTrack);
 
-        var vp8Format = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 96, "VP8", 90000);
-        var videoTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
-        participant.PeerConnection.addTrack(videoTrack);
+            var vp8Format = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 96, "VP8", 90000);
+            var videoTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
+            participant.Tracks.Add(videoTrack);
+            participant.PeerConnection.addTrack(videoTrack);
+        }
 
         var result = participant.PeerConnection.setRemoteDescription(offer);
         if (result != SIPSorcery.Net.SetDescriptionResultEnum.OK)
@@ -189,7 +203,7 @@ public class RoomService : IRoomService
         }
 
         var answer = participant.PeerConnection.createAnswer();
-        participant.PeerConnection.setLocalDescription(answer);
+        await participant.PeerConnection.setLocalDescription(answer);
 
         participant.OnIceCandidateHandler = candidate => Pc_onicecandidate(candidate, roomId, socketId, participant.PeerConnection);
         participant.OnSignalingStateChangeHandler = () => Pc_onsignalingstatechange(roomId, socketId, participant.PeerConnection);
@@ -203,23 +217,20 @@ public class RoomService : IRoomService
         participant.PeerConnection.OnReceiveReport += participant.OnReceiveReportHandler;
         participant.PeerConnection.OnTimeout += participant.OnTimeoutHandler;
 
-        foreach (var existingParticipant in room.Participants.Where(p => p.SocketId != socketId))
+        OnRenegotiation?.Invoke(this, (participant.SocketId, answer));
+
+        foreach (var roomParticipant in room.Participants)
         {
-            if (existingParticipant.PeerConnection == null)
+            if (roomParticipant.PeerConnection == null)
             {
                 continue;
             }
-
-            var forwardedTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
-            existingParticipant.PeerConnection.addTrack(forwardedTrack);
-
-            var existingOffer = existingParticipant.PeerConnection.createOffer();
-            existingParticipant.PeerConnection.setLocalDescription(existingOffer);
-
-            OnRenegotiation?.Invoke(this, (existingParticipant.SocketId, existingOffer));
-        }
-
-        OnRenegotiation?.Invoke(this, (participant.SocketId, answer));
+            
+            var existingOffer = roomParticipant.PeerConnection.createOffer();
+            await roomParticipant.PeerConnection.setLocalDescription(existingOffer);
+            
+            OnRenegotiation?.Invoke(this, (roomParticipant.SocketId, existingOffer));
+        }            
     }
 
     private void Pc_OnTimeout(SDPMediaTypesEnum mediaType, Guid roomId, Guid socketId, RTCPeerConnection pc)

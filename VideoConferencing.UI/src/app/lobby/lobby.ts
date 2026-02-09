@@ -1,5 +1,5 @@
-import { CommonModule, NgIf } from "@angular/common";
-import { Component, ElementRef, OnInit, ViewChild } from "@angular/core";
+import { CommonModule } from "@angular/common";
+import { Component, ElementRef, OnInit, QueryList, ViewChild, ViewChildren } from "@angular/core";
 import { NgIconComponent } from "@ng-icons/core";
 import { Loader } from "../../components/loader/loader";
 import { Room } from "../../data/room";
@@ -7,7 +7,7 @@ import { VideoConferencingWebSocketService } from "../../services/websocket/vide
 
 @Component({
   selector: 'app-lobby',
-  imports: [CommonModule, NgIconComponent, Loader, NgIf],
+  imports: [CommonModule, NgIconComponent, Loader],
   templateUrl: './lobby.html',
   styleUrl: './lobby.css',
 })
@@ -62,8 +62,8 @@ export class Lobby implements OnInit {
   localMediaStream?: MediaStream | null;
   @ViewChild('localVideo') localVideoElement?: ElementRef<HTMLVideoElement>;
 
-  remoteMediaStream?: MediaStream | null;
-  @ViewChild('remoteVideo') remoteVideoElement?: ElementRef<HTMLVideoElement>;
+  remoteMediaStreams?: MediaStream[] = [];
+  @ViewChildren('remoteVideo') remoteVideoElements!: QueryList<ElementRef<HTMLVideoElement>>;
 
   private peerConnection: RTCPeerConnection | null = null;
 
@@ -99,13 +99,16 @@ export class Lobby implements OnInit {
     this.peerConnection.ontrack = (event) => {
       console.log('Received remote track:', event.track);
 
-      this.remoteMediaStream = event.streams[0];
+      const videoElementIndex = Math.floor(this.remoteMediaStreams!.length / 2);
 
-      if (this.remoteVideoElement) {
-        this.remoteVideoElement.nativeElement.srcObject = this.remoteMediaStream;
-      }  
+      this.remoteMediaStreams?.push(event.streams[0]);
 
+      const videoElementsArray = this.remoteVideoElements!.toArray();
+      const element = videoElementsArray[videoElementIndex];
+      element.nativeElement.srcObject = event.streams[0];
+      
       event.track.onended = () => {
+        this.remoteMediaStreams = this.remoteMediaStreams?.filter(stream => stream.id !== event.streams[0].id);
         console.log('Remote track ended:', event.track);
       };
     };
@@ -140,10 +143,8 @@ export class Lobby implements OnInit {
     this.peerConnection?.close();
     this.peerConnection = null;
 
-    this.remoteMediaStream = null;
-    
-    if (this.remoteVideoElement) {
-      this.remoteVideoElement.nativeElement.srcObject = null;
-    }
+
+    // this.remoteMediaStream?.getTracks().forEach(track => track.stop());
+    // this.remoteMediaStream = null;
   }
 }

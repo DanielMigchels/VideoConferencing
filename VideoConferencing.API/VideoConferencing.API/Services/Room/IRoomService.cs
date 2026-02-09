@@ -15,5 +15,5 @@ public interface IRoomService
     public void JoinRoom(Guid roomId, Guid socketId);
     public void LeaveRoom(Guid socketId);
     public void RequestKeyframes(Guid roomId, Guid socketId);
-    public void CreatePeerConnection(Guid roomId, Guid socketId, string offer);
+    public Task CreatePeerConnection(Guid roomId, Guid socketId, string offer);
 }

@@ -154,7 +154,7 @@ public sealed class VideoConferencingWebSocketHandler : WebsocketHandler
 
     private async Task CreatePeerConnectionAsync(Guid socketId, CreatePeerConnection startNegotiation)
     {
-        _roomService.CreatePeerConnection(startNegotiation.RoomId, socketId, startNegotiation.SessionDescription.ToString() ?? string.Empty);
+        await _roomService.CreatePeerConnection(startNegotiation.RoomId, socketId, startNegotiation.SessionDescription.ToString() ?? string.Empty);
 
         await Task.CompletedTask;
     }
