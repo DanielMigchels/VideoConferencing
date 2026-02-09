@@ -119,30 +119,11 @@ public class RoomService : IRoomService
             {
                 if (participant.PeerConnection != null)
                 {
-                    if (participant.OnIceCandidateHandler != null)
-                    {
-                        participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
-                    }
-
-                    if (participant.OnSignalingStateChangeHandler != null)
-                    {
-                        participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
-                    }
-
-                    if (participant.OnRtpPacketReceivedHandler != null)
-                    {
-                        participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
-                    }
-
-                    if (participant.OnReceiveReportHandler != null)
-                    {
-                        participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
-                    }
-
-                    if (participant.OnTimeoutHandler != null)
-                    {
-                        participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
-                    }
+                    participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
+                    participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
+                    participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
+                    participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
+                    participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
 
                     participant.PeerConnection.Close("Room left");
                     participant.PeerConnection.Dispose();
@@ -189,47 +170,48 @@ public class RoomService : IRoomService
         {
             X_UseRtpFeedbackProfile = true
         };
-        var pc = new RTCPeerConnection(config);
+
+        participant.PeerConnection = new RTCPeerConnection(config);
 
         var opusFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 111, "opus", 48000, 2);
         var pcmuFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 0, "PCMU", 8000);
         var audioTrack = new MediaStreamTrack(SDPMediaTypesEnum.audio, false, new List<SDPAudioVideoMediaFormat> { opusFormat, pcmuFormat }, MediaStreamStatusEnum.SendRecv);
-        pc.addTrack(audioTrack);
+        participant.PeerConnection.addTrack(audioTrack);
 
         var vp8Format = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 96, "VP8", 90000);
         var videoTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
-        pc.addTrack(videoTrack);
-        
-        var result = pc.setRemoteDescription(offer);
+        participant.PeerConnection.addTrack(videoTrack);
+
+        var result = participant.PeerConnection.setRemoteDescription(offer);
         if (result != SIPSorcery.Net.SetDescriptionResultEnum.OK)
         {
             throw new Exception("Could not set remote description");
         }
 
-        var answer = pc.createAnswer();
-        pc.setLocalDescription(answer);
+        var answer = participant.PeerConnection.createAnswer();
+        participant.PeerConnection.setLocalDescription(answer);
 
-        participant.OnIceCandidateHandler = candidate => Pc_onicecandidate(candidate, roomId, socketId, pc);
-        participant.OnSignalingStateChangeHandler = () => Pc_onsignalingstatechange(roomId, socketId, pc);
-        participant.OnRtpPacketReceivedHandler = (remoteEP, mediaType, rtpPacket) => Pc_OnRtpPacketReceived(remoteEP, mediaType, rtpPacket, roomId, socketId, pc);
-        participant.OnReceiveReportHandler = (remoteEP, mediaType, rtcpReport) => Pc_OnReceiveReport(remoteEP, mediaType, rtcpReport, roomId, socketId, pc);
-        participant.OnTimeoutHandler = mediaType => Pc_OnTimeout(mediaType, roomId, socketId, pc);
+        participant.OnIceCandidateHandler = candidate => Pc_onicecandidate(candidate, roomId, socketId, participant.PeerConnection);
+        participant.OnSignalingStateChangeHandler = () => Pc_onsignalingstatechange(roomId, socketId, participant.PeerConnection);
+        participant.OnRtpPacketReceivedHandler = (remoteEP, mediaType, rtpPacket) => Pc_OnRtpPacketReceived(remoteEP, mediaType, rtpPacket, roomId, socketId, participant.PeerConnection);
+        participant.OnReceiveReportHandler = (remoteEP, mediaType, rtcpReport) => Pc_OnReceiveReport(remoteEP, mediaType, rtcpReport, roomId, socketId, participant.PeerConnection);
+        participant.OnTimeoutHandler = mediaType => Pc_OnTimeout(mediaType, roomId, socketId, participant.PeerConnection);
 
-        pc.onicecandidate += participant.OnIceCandidateHandler;
-        pc.onsignalingstatechange += participant.OnSignalingStateChangeHandler;
-        pc.OnRtpPacketReceived += participant.OnRtpPacketReceivedHandler;
-        pc.OnReceiveReport += participant.OnReceiveReportHandler;
-        pc.OnTimeout += participant.OnTimeoutHandler;
-
-        participant.PeerConnection = pc;
+        participant.PeerConnection.onicecandidate += participant.OnIceCandidateHandler;
+        participant.PeerConnection.onsignalingstatechange += participant.OnSignalingStateChangeHandler;
+        participant.PeerConnection.OnRtpPacketReceived += participant.OnRtpPacketReceivedHandler;
+        participant.PeerConnection.OnReceiveReport += participant.OnReceiveReportHandler;
+        participant.PeerConnection.OnTimeout += participant.OnTimeoutHandler;
 
         foreach (var existingParticipant in room.Participants.Where(p => p.SocketId != socketId))
         {
-
             if (existingParticipant.PeerConnection == null)
             {
                 continue;
             }
+
+            var forwardedTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
+            existingParticipant.PeerConnection.addTrack(forwardedTrack);
 
             var existingOffer = existingParticipant.PeerConnection.createOffer();
             existingParticipant.PeerConnection.setLocalDescription(existingOffer);

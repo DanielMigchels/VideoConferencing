@@ -1,4 +1,4 @@
-import { CommonModule } from "@angular/common";
+import { CommonModule, NgIf } from "@angular/common";
 import { Component, ElementRef, OnInit, ViewChild } from "@angular/core";
 import { NgIconComponent } from "@ng-icons/core";
 import { Loader } from "../../components/loader/loader";
@@ -7,7 +7,7 @@ import { VideoConferencingWebSocketService } from "../../services/websocket/vide
 
 @Component({
   selector: 'app-lobby',
-  imports: [CommonModule, NgIconComponent, Loader],
+  imports: [CommonModule, NgIconComponent, Loader, NgIf],
   templateUrl: './lobby.html',
   styleUrl: './lobby.css',
 })
@@ -61,7 +61,10 @@ export class Lobby implements OnInit {
 
   localMediaStream?: MediaStream | null;
   @ViewChild('localVideo') localVideoElement?: ElementRef<HTMLVideoElement>;
-  
+
+  remoteMediaStream?: MediaStream | null;
+  @ViewChild('remoteVideo') remoteVideoElement?: ElementRef<HTMLVideoElement>;
+
   private peerConnection: RTCPeerConnection | null = null;
 
   async startVideo() {
@@ -95,7 +98,12 @@ export class Lobby implements OnInit {
 
     this.peerConnection.ontrack = (event) => {
       console.log('Received remote track:', event.track);
-      const remoteStream = event.streams[0];
+
+      this.remoteMediaStream = event.streams[0];
+
+      if (this.remoteVideoElement) {
+        this.remoteVideoElement.nativeElement.srcObject = this.remoteMediaStream;
+      }  
 
       event.track.onended = () => {
         console.log('Remote track ended:', event.track);
@@ -131,5 +139,11 @@ export class Lobby implements OnInit {
 
     this.peerConnection?.close();
     this.peerConnection = null;
+
+    this.remoteMediaStream = null;
+    
+    if (this.remoteVideoElement) {
+      this.remoteVideoElement.nativeElement.srcObject = null;
+    }
   }
 }
