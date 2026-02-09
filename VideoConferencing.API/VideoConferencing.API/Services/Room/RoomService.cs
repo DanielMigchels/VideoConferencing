@@ -80,12 +80,17 @@ public class RoomService : IRoomService
 
     public void JoinRoom(Guid roomId, Guid socketId)
     {
-        LeaveRoom(socketId);
-
         if (!rooms.TryGetValue(roomId, out var room))
         {
             return;
         }
+
+        if(room.Participants.Count >= 2)
+        {
+            return;
+        }
+
+        LeaveRoom(socketId);
 
         if (room.Participants.Any(x => x.SocketId == socketId))
         {
@@ -118,30 +123,11 @@ public class RoomService : IRoomService
             {
                 if (participant.PeerConnection != null)
                 {
-                    if (participant.OnIceCandidateHandler != null)
-                    {
-                        participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
-                    }
-
-                    if (participant.OnSignalingStateChangeHandler != null)
-                    {
-                        participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
-                    }
-
-                    if (participant.OnRtpPacketReceivedHandler != null)
-                    {
-                        participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
-                    }
-
-                    if (participant.OnReceiveReportHandler != null)
-                    {
-                        participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
-                    }
-
-                    if (participant.OnTimeoutHandler != null)
-                    {
-                        participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
-                    }
+                    participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
+                    participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
+                    participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
+                    participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
+                    participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
 
                     participant.PeerConnection.Close("Room left");
                     participant.PeerConnection.Dispose();

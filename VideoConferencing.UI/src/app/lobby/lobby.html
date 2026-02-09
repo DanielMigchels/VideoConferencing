@@ -1,5 +1,5 @@
-<div class="flex h-full flex-col justify-between overflow-hidden">
-  <div class="flex justify-center items-center w-full h-full text-[#4c4c4c] overflow-hidden">
+<div class="flex w-full h-full flex-col justify-between">
+  <div class="flex justify-center items-center w-full h-full text-[#4c4c4c]">
 
     <div *ngIf="joinedRoom === null">Currently not in call</div>
 
@@ -7,21 +7,18 @@
       <div class="w-full overflow-auto text-[#4c4c4c]">
         <div class="w-full min-h-full flex justify-center p-4">
           <div class="flex flex-wrap justify-center gap-4 w-full max-w-7xl">
-
             <div class="w-96 aspect-video bg-[#181818] rounded relative">
               <div class="absolute inset-0 flex justify-center items-center">
                 <app-loader class="w-full"></app-loader>
               </div>
               <video #remoteVideo autoplay playsinline class=" absolute w-full h-full object-contain rounded"></video>
             </div>
-
             <div class="w-96 aspect-video bg-[#181818] rounded relative">
               <div class="absolute inset-0 flex justify-center items-center">
                 <app-loader class="w-full"></app-loader>
               </div>
               <video #localVideo autoplay playsinline muted class=" absolute w-full h-full object-contain rounded"></video>
             </div>
-
           </div>
         </div>
       </div>
@@ -34,8 +31,8 @@
     </div>
   </div>
   <div
-    class="mb-14 sm:mb-0 bg-[#181818] h-16 border-t border-t-[#2B2B2B] flex items-center justify-center overflow-y-hidden overflow-x-auto">
-    <div class="flex justify-start items-stretch w-full h-full ">
+    class="bg-[#181818] h-16 border-t border-t-[#2B2B2B] flex items-center justify-center overflow-y-hidden overflow-x-auto">
+    <div class="flex justify-start items-stretch w-full h-full">
       <button *ngFor="let room of rooms" (click)="joinRoom(room.id)"
         class="bg-[#131313] flex border-x border-x-[#1F1F1F] items-start hover:bg-[#1A1A1A] cursor-pointer transition-colors">
         <div class="h-full flex flex-row gap-4 justify-center items-center px-4">
@@ -46,7 +43,9 @@
             class="w-2 h-2 bg-blue-300 rounded-full"></div>
           <div class="flex items-center text-[#4c4c4c]">
             <ng-icon name="hero-user-solid"></ng-icon>
-            {{room.participantCount}}
+            <span class="text-nowrap">
+              {{room.participantCount}} / 2
+            </span>
           </div>
         </div>
         <div (click)="deleteRoom(room.id); $event.stopPropagation();"
