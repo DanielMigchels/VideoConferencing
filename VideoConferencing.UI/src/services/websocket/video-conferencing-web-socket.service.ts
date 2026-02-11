@@ -86,16 +86,16 @@ export class VideoConferencingWebSocketService {
       const wsProtocol = isSecure ? "wss" : "ws";
 
       const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
-      console.log('Connecting to WebSocket:', wsUrl);
+      console.debug('Connecting to WebSocket:', wsUrl);
       this.socket = new WebSocket(wsUrl);
   
       this.socket.onopen = () => {
-        console.log('WebSocket connected to', wsUrl);
+        console.debug('WebSocket connected to', wsUrl);
         this.connected.next();
       };
       this.socket.onmessage = (event) => this.handleMessage(event.data);
       this.socket.onclose = () => {
-        console.log('WebSocket disconnected, refreshing webpage...');
+        console.debug('WebSocket disconnected, refreshing webpage...');
         window.location.reload();
       };
       this.socket.onerror = (error) => console.error('WebSocket error:', error);
@@ -124,17 +124,17 @@ export class VideoConferencingWebSocketService {
   }
 
   handleRoomUpdated(message: RoomUpdated) {
-    console.log('Joined room updated:', message.room);
+    console.debug('Joined room updated:', message.room);
     this.getRoomUpdatedSubject.next(message);
   }
 
   private handleRoomListUpdated(message: RoomListUpdated): void {
-    console.log('Room list updated:', message.rooms);
+    console.debug('Room list updated:', message.rooms);
     this.getRoomListUpdatedSubject.next(message);
   }
 
   handleOfferProcessed(message: OfferProcessed) {
-    console.log('Offer processed:', message);
+    console.debug('Offer processed:', message);
     this.getOfferProcessedSubject.next(message);
   }
 

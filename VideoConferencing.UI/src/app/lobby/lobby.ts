@@ -14,6 +14,7 @@ import { Loader } from "../../components/loader/loader";
 export class Lobby implements OnInit {
   rooms: Room[] = [];
   joinedRoom: Room | null = null;
+  showSecondParticipant = false;
 
   constructor(private ws: VideoConferencingWebSocketService) {
 
@@ -25,6 +26,8 @@ export class Lobby implements OnInit {
     });
 
     this.ws.getRoomUpdated().subscribe(async x => {
+      this.showSecondParticipant = x.room?.participantCount! > 1;
+
       if (this.joinedRoom === null) {
         this.joinedRoom = x.room;
         this.startVideo();
@@ -32,6 +35,7 @@ export class Lobby implements OnInit {
       else {
         this.joinedRoom = x.room;
       }
+
     });
 
     this.ws.getOfferProcessed().subscribe(async x => {
@@ -79,7 +83,7 @@ export class Lobby implements OnInit {
       this.stopVideo();
     }
 
-    console.log('Starting local video...');
+    console.debug('Starting local video...');
 
     this.localStream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -110,28 +114,25 @@ export class Lobby implements OnInit {
 
     this.localPeerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        console.log('New ICE candidate:', event.candidate);
+        console.debug('New ICE candidate:', event.candidate);
       }
     };
 
     this.localPeerConnection.ontrack = (event) => {
-      console.log('Received remote track:', event.streams);
+      console.debug('Received remote track:', event.streams);
       const remoteStream = event.streams[0];
 
       this.remoteParticipant = remoteStream;
-
-      if (this.remoteVideo) {
-        this.remoteVideo.nativeElement.srcObject = remoteStream;
-      }
+      this.remoteVideo!.nativeElement.srcObject = remoteStream;
     };
 
     this.localPeerConnection.onconnectionstatechange = () => {
-      console.log('Connection state change:', this.localPeerConnection!.connectionState);
+      console.debug('Connection state change:', this.localPeerConnection!.connectionState);
     };
 
     const offer = await this.localPeerConnection!.createOffer();
     await this.localPeerConnection!.setLocalDescription(offer);
-    console.log('Send offer...');
+    console.debug('Send offer...');
     this.ws.sendOffer(this.joinedRoom!.id, offer);
   }
 
@@ -151,7 +152,7 @@ export class Lobby implements OnInit {
   }
 
   async stopVideo() {
-    console.log('Stopping local video...');
+    console.debug('Stopping local video...');
 
     this.localPeerConnection?.close();
     this.localPeerConnection = null;
