@@ -1,0 +1,22 @@
+FROM node:22 AS angular-build
+WORKDIR /app
+COPY ./VideoConferencing.UI ./VideoConferencing.UI
+WORKDIR /app/VideoConferencing.UI
+RUN npm install
+# RUN npm audit
+RUN npm run build --prod
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build
+WORKDIR /src
+COPY ./VideoConferencing.API .
+RUN dotnet restore "VideoConferencing.API/VideoConferencing.API.csproj"
+RUN dotnet publish "VideoConferencing.API/VideoConferencing.API.csproj" -c Release -o /app/publish
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+WORKDIR /app
+COPY --from=angular-build /app/VideoConferencing.UI/dist /app/wwwroot
+COPY --from=dotnet-build /app/publish .
+COPY ./VideoConferencing.API/VideoConferencing.API/https.pfx ./https.pfx
+EXPOSE 8080
+EXPOSE 8443
+ENTRYPOINT ["dotnet", "VideoConferencing.API.dll"]
