@@ -6,11 +6,20 @@ A self-hostable video conferencing solution that does not rely on third-party SF
 
 <img style="width: 600px;" src="VideoConferencing.Docs/demo.gif">
 
-# How does it work?
+## How does it work?
 
 This project provides video calling without an SFU. The backend forwards RTP packets through the server to other clients. Media uses UDP. When running in Docker, publish a UDP range (for example `50000-50100/udp`). Set `HOST` to the IP address that other clients can reach (for example your LAN IP). This is used to advertise a host-reachable address for ICE.
 
-<img style="width: 600px;" src="VideoConferencing.Docs/diagram.png">
+<img style="width: 600px;background: #FFFFFF; padding:20px" src="VideoConferencing.Docs/videoconferencing.drawio.png">
+
+#### Protocols
+- **HTTPS** - Serves the static web application to clients
+- **WSS (WebSocket Secure)** - Handles real-time signaling between clients and server for room management, peer discovery, and WebRTC session negotiation (offer/answer exchange)
+- **WebRTC** - Establishes media connections for transmitting audio and video RTP streams between participants
+
+#### Applications
+- **VideoConferencing.UI** - Angular-based frontend that handles the user interface, captures local media streams, manages WebRTC peer connections, and renders remote video feeds
+- **VideoConferencing.API** - .NET backend that coordinates signaling over WebSockets, manages room state, and forwards RTP media packets between participants using SIP Sorcery for WebRTC processing
 
 ## How to Run
 
@@ -19,7 +28,8 @@ Instructions for running the application.
 ### Docker Run
 Pull the image from Docker Hub and run it locally.
 
-Replace the IP address with the address of your host machine.
+> **Important:** Replace `HOST=192.168.1.100` with the IP address of your host machine.
+
 ```bash
 docker run -e HOST=192.168.1.100 -p 8443:8443 -p 50000-50100:50000-50100/udp danielmigchels/videoconferencing
 ```
