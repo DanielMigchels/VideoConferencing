@@ -10,7 +10,7 @@ A self-hostable video conferencing solution that does not rely on third-party SF
 
 This project provides video calling without an SFU. The backend forwards RTP packets through the server to other clients. Media uses UDP. When running in Docker, publish a UDP range (for example `50000-50100/udp`). Set `HOST` to the IP address that other clients can reach (for example your LAN IP). This is used to advertise a host-reachable address for ICE.
 
-<img style="width: 600px;background: #FFFFFF; padding:20px" src="VideoConferencing.Docs/videoconferencing.drawio.png">
+<img style="width: 600px;" src="VideoConferencing.Docs/videoconferencing.drawio.png">
 
 #### Protocols
 - **HTTPS** - Serves the static web application to clients
