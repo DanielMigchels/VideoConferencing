@@ -4,7 +4,26 @@ COPY ./VideoConferencing.UI ./VideoConferencing.UI
 WORKDIR /app/VideoConferencing.UI
 RUN npm install
 # RUN npm audit
-RUN npm run build --prod
+RUN npm run build
+
+FROM debian:bookworm-slim AS certgen
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends openssl ca-certificates \
+	&& rm -rf /var/lib/apt/lists/*
+
+ARG CERT_PASSWORD=password
+
+RUN openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 3650 \
+	-subj "/CN=localhost" \
+	-addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+	-keyout /tmp/https.key \
+	-out /tmp/https.crt \
+	&& openssl pkcs12 -export \
+	-out /https.pfx \
+	-inkey /tmp/https.key \
+	-in /tmp/https.crt \
+	-passout pass:${CERT_PASSWORD} \
+	&& rm -f /tmp/https.key /tmp/https.crt
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build
 WORKDIR /src
@@ -16,6 +35,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 COPY --from=angular-build /app/VideoConferencing.UI/dist /app/wwwroot
 COPY --from=dotnet-build /app/publish .
-COPY ./VideoConferencing.API/VideoConferencing.API/https.pfx ./https.pfx
+
+ARG CERT_PASSWORD=password
+ENV ASPNETCORE_URLS=https://+:8443
+ENV ASPNETCORE_Kestrel__Certificates__Default__Path=/https.pfx
+ENV ASPNETCORE_Kestrel__Certificates__Default__Password=${CERT_PASSWORD}
+
+COPY --from=certgen /https.pfx /https.pfx
 EXPOSE 8443
 ENTRYPOINT ["dotnet", "VideoConferencing.API.dll"]

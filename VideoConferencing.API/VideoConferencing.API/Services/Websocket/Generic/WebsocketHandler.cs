@@ -25,7 +25,19 @@ public abstract class WebsocketHandler : IWebsocketHandler
         {
             while (webSocket.State == WebSocketState.Open)
             {
-                var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                WebSocketReceiveResult result;
+                try
+                {
+                    result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (WebSocketException)
+                {
+                    break;
+                }
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
@@ -47,7 +59,22 @@ public abstract class WebsocketHandler : IWebsocketHandler
         {
             OnClose?.Invoke(this, socketId);
             sockets.TryRemove(socketId, out _);
-            await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed", CancellationToken.None);
+
+            try
+            {
+                if (webSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+                {
+                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed", CancellationToken.None);
+                }
+            }
+            catch (WebSocketException)
+            {
+                // Ignore shutdown races (e.g., Aborted)
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ignore shutdown races
+            }
         }
     }
 

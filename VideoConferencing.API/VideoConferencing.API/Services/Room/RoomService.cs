@@ -1,4 +1,5 @@
 ﻿using SIPSorcery.Net;
+using SIPSorcery.Sys;
 using System.Text.Json;
 using System.Collections.Concurrent;
 
@@ -174,7 +175,35 @@ public class RoomService : IRoomService
         {
             X_UseRtpFeedbackProfile = true
         };
-        var pc = new RTCPeerConnection(config);
+
+        // In Docker/NAT scenarios it's helpful to force a predictable UDP port range
+        // so the range can be published on the container.
+        var portRange = new PortRange(50000, 50100);
+        var pc = new RTCPeerConnection(config, bindPort: 0, portRange: portRange);
+
+        // Optional: advertise a host-reachable ICE candidate (e.g. 127.0.0.1 for local testing,
+        // or your machine's LAN IP for other devices on the LAN).
+        // Without this, ICE host candidates can end up using the container's private IP.
+        var advertisedIp = Environment.GetEnvironmentVariable("ADVERTISED_IP");
+        if (!string.IsNullOrWhiteSpace(advertisedIp) &&
+            System.Net.IPAddress.TryParse(advertisedIp, out var advertisedAddress))
+        {
+            try
+            {
+                var rtpPort = pc.GetRtpChannel().RTPPort;
+                var natCandidate = new RTCIceCandidate(
+                    RTCIceProtocol.udp,
+                    advertisedAddress,
+                    checked((ushort)rtpPort),
+                    RTCIceCandidateType.host);
+                pc.addLocalIceCandidate(natCandidate);
+                logger.LogInformation("Added advertised ICE candidate {AdvertisedIp}:{RtpPort}", advertisedIp, rtpPort);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to add advertised ICE candidate for {AdvertisedIp}", advertisedIp);
+            }
+        }
 
         var opusFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 111, "opus", 48000, 2);
         var pcmuFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 0, "PCMU", 8000);

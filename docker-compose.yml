@@ -3,8 +3,11 @@ services:
     build:
       context: .
       dockerfile: VideoConferencing.Docker/dockerfile
+    environment:
+      ADVERTISED_IP: ${ADVERTISED_IP:-192.168.1.58}
     ports:
       - 8443:8443
+      - 50000-50100:50000-50100/udp
     networks:
       - videoconferencing_network
 
