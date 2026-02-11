@@ -17,6 +17,5 @@ WORKDIR /app
 COPY --from=angular-build /app/VideoConferencing.UI/dist /app/wwwroot
 COPY --from=dotnet-build /app/publish .
 COPY ./VideoConferencing.API/VideoConferencing.API/https.pfx ./https.pfx
-EXPOSE 8080
 EXPOSE 8443
 ENTRYPOINT ["dotnet", "VideoConferencing.API.dll"]

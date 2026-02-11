@@ -1,0 +1,13 @@
+services:
+  videoconferencing:
+    build:
+      context: .
+      dockerfile: VideoConferencing.Docker/dockerfile
+    ports:
+      - 8443:8443
+    networks:
+      - videoconferencing_network
+
+networks:
+  videoconferencing_network:
+    driver: bridge

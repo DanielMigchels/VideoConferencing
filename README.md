@@ -1,6 +1,6 @@
 # VideoConferencing
 
-A self-hostable video conferencing solution for multiple participants without relying on third-party SFU services or cloud dependencies.
+A self-hostable video conferencing solution without relying on third-party SFU services or cloud dependencies.
 
 ---
 
