@@ -30,14 +30,8 @@ public abstract class WebsocketHandler : IWebsocketHandler
                 {
                     result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
                 }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (WebSocketException)
-                {
-                    break;
-                }
+                catch (OperationCanceledException) { break; }
+                catch (WebSocketException) { break; }
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
@@ -67,14 +61,8 @@ public abstract class WebsocketHandler : IWebsocketHandler
                     await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed", CancellationToken.None);
                 }
             }
-            catch (WebSocketException)
-            {
-                // Ignore shutdown races (e.g., Aborted)
-            }
-            catch (ObjectDisposedException)
-            {
-                // Ignore shutdown races
-            }
+            catch (WebSocketException) { }
+            catch (ObjectDisposedException) { }
         }
     }
 

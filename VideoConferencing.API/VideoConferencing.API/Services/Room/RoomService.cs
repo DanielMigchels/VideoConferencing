@@ -176,26 +176,16 @@ public class RoomService : IRoomService
             X_UseRtpFeedbackProfile = true
         };
 
-        // In Docker/NAT scenarios it's helpful to force a predictable UDP port range
-        // so the range can be published on the container.
         var portRange = new PortRange(50000, 50100);
         var pc = new RTCPeerConnection(config, bindPort: 0, portRange: portRange);
 
-        // Optional: advertise a host-reachable ICE candidate (e.g. 127.0.0.1 for local testing,
-        // or your machine's LAN IP for other devices on the LAN).
-        // Without this, ICE host candidates can end up using the container's private IP.
-        var advertisedIp = Environment.GetEnvironmentVariable("ADVERTISED_IP");
-        if (!string.IsNullOrWhiteSpace(advertisedIp) &&
-            System.Net.IPAddress.TryParse(advertisedIp, out var advertisedAddress))
+        var advertisedIp = Environment.GetEnvironmentVariable("HOST");
+        if (!string.IsNullOrWhiteSpace(advertisedIp) && System.Net.IPAddress.TryParse(advertisedIp, out var advertisedAddress))
         {
             try
             {
                 var rtpPort = pc.GetRtpChannel().RTPPort;
-                var natCandidate = new RTCIceCandidate(
-                    RTCIceProtocol.udp,
-                    advertisedAddress,
-                    checked((ushort)rtpPort),
-                    RTCIceCandidateType.host);
+                var natCandidate = new RTCIceCandidate(RTCIceProtocol.udp, advertisedAddress, checked((ushort)rtpPort), RTCIceCandidateType.host);
                 pc.addLocalIceCandidate(natCandidate);
                 logger.LogInformation("Added advertised ICE candidate {AdvertisedIp}:{RtpPort}", advertisedIp, rtpPort);
             }
