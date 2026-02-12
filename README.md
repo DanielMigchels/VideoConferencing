@@ -6,7 +6,7 @@ A self-hostable video conferencing solution that does not rely on third-party SF
 
 <img style="width: 600px;" src="VideoConferencing.Docs/demo.gif">
 
-# Purpose of project
+## Purpose of project
 
 Through my experience working with various software companies and teams, I've observed that real-time video communication is considered a significant challenge, despite high demand from customers in sectors like e-commerce, healthcare, and legal services for secure video calling capabilities.
 
