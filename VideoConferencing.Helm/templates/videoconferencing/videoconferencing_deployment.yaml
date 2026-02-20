@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: videoconferencing-deployment
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: videoconferencing-deployment
+  template:
+    metadata:
+      labels:
+        app: videoconferencing-deployment
+    spec:
+      containers:
+        - name: videoconferencing-deployment
+          image: 'danielmigchels/videoconferencing:latest'
+          imagePullPolicy: Always
+          env:
+            - name: HOST
+              valueFrom:
+                secretKeyRef:
+                  name: videoconferencing-secret
+                  key: HOST
+          ports:
+            - containerPort: 8080
+            - containerPort: 8443
+            {{- range untilStep 50000 50101 1 }}
+            - containerPort: {{ . }}
+              protocol: UDP
+            {{- end }}

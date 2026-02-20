@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: videoconferencing-udp-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: videoconferencing-service
+spec:
+  type: NodePort
+  ports:
+    {{- range untilStep 50000 50101 1 }}
+    - name: udp-{{ . }}
+      port: {{ . }}
+      targetPort: {{ . }}
+      nodePort: {{ . }}
+      protocol: UDP
+    {{- end }}
+  selector:
+    app: videoconferencing-deployment
