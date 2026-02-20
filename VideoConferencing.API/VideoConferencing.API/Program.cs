@@ -22,8 +22,6 @@ builder.Services.AddSpaStaticFiles(configuration =>
 
 var app = builder.Build();
 
-app.UseHttpsRedirection();
-
 app.UseWebSockets();
 var webSocketHandler = app.Services.GetRequiredService<VideoConferencingWebSocketHandler>();
 app.Map("/ws", async context =>
