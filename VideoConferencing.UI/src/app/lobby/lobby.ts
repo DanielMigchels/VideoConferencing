@@ -32,6 +32,7 @@ export class Lobby implements OnInit, OnDestroy {
 
     this.subscriptions.push(
       this.ws.getRoomUpdated().subscribe(async x => {
+        const previousParticipantCount = this.joinedRoom?.participantCount ?? 0;
         this.showSecondParticipant = x.room?.participantCount! > 1;
 
         if (this.joinedRoom === null) {
@@ -40,6 +41,14 @@ export class Lobby implements OnInit, OnDestroy {
         }
         else {
           this.joinedRoom = x.room;
+
+          if (x.room?.participantCount! <= 1) {
+            this.clearRemoteStream();
+          }
+
+          if (x.room?.participantCount! > 1 && previousParticipantCount <= 1) {
+            await this.createAndSendOffer();
+          }
         }
       })
     );
@@ -102,7 +111,12 @@ export class Lobby implements OnInit, OnDestroy {
   @ViewChild('localVideo') localVideo?: ElementRef<HTMLVideoElement>;
   @ViewChild('remoteVideo') remoteVideo?: ElementRef<HTMLVideoElement>;
   private localPeerConnection: RTCPeerConnection | null = null;
-  private readonly configuration: RTCConfiguration = {};
+  private readonly configuration: RTCConfiguration = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ],
+  };
   remoteParticipant?: MediaStream;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private maxRetries = 5;
@@ -122,9 +136,9 @@ export class Lobby implements OnInit, OnDestroy {
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 854 },
-          height: { ideal: 480 },
-          frameRate: { ideal: 24, max: 30 }
+          width: { ideal: 640 },
+          height: { ideal: 360 },
+          frameRate: { ideal: 20, max: 24 },
         },
         audio: {
           echoCancellation: true,
@@ -201,14 +215,15 @@ export class Lobby implements OnInit, OnDestroy {
           clearTimeout(this.retryTimer);
           this.retryTimer = null;
         }
-        // Request keyframe once the connection is fully established
+        // Request keyframes to ensure a clean decoder start
         if (this.joinedRoom) {
           this.ws.requestKeyframe(this.joinedRoom.id);
           setTimeout(() => {
-            if (this.joinedRoom) {
-              this.ws.requestKeyframe(this.joinedRoom.id);
-            }
-          }, 1000);
+            if (this.joinedRoom) this.ws.requestKeyframe(this.joinedRoom.id);
+          }, 500);
+          setTimeout(() => {
+            if (this.joinedRoom) this.ws.requestKeyframe(this.joinedRoom.id);
+          }, 1500);
         }
       }
     };
@@ -290,11 +305,20 @@ export class Lobby implements OnInit, OnDestroy {
     }
   }
 
+  private clearRemoteStream() {
+    this.remoteParticipant = undefined;
+    if (this.remoteVideo) {
+      this.remoteVideo.nativeElement.srcObject = null;
+    }
+  }
+
   private cleanupPeerConnection() {
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
+
+    this.clearRemoteStream();
 
     if (this.localPeerConnection) {
       this.localPeerConnection.onicecandidate = null;
@@ -327,8 +351,8 @@ export class Lobby implements OnInit, OnDestroy {
       }
 
       if (sender.track?.kind === 'video') {
-        params.encodings[0].maxBitrate = 500_000;
-        params.encodings[0].maxFramerate = 30;
+        params.encodings[0].maxBitrate = 250_000;
+        params.encodings[0].maxFramerate = 24;
       } else if (sender.track?.kind === 'audio') {
         params.encodings[0].maxBitrate = 32_000;
       }

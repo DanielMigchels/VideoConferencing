@@ -51,30 +51,7 @@ public class RoomService : IRoomService
 
         foreach (var participant in participants)
         {
-            participant.KeyframeTimer?.Dispose();
-            participant.KeyframeTimer = null;
-
-            if (participant.PeerConnection != null)
-            {
-                participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
-                participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
-                participant.PeerConnection.onconnectionstatechange -= participant.OnConnectionStateChangeHandler;
-                participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
-                participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
-                participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
-
-                participant.PeerConnection.Close("Room left");
-                participant.PeerConnection.Dispose();
-                participant.PeerConnection = null;
-
-                participant.OnIceCandidateHandler = null;
-                participant.OnSignalingStateChangeHandler = null;
-                participant.OnConnectionStateChangeHandler = null;
-                participant.OnRtpPacketReceivedHandler = null;
-                participant.OnReceiveReportHandler = null;
-                participant.OnTimeoutHandler = null;
-            }
-
+            CleanupParticipantPeerConnection(participant);
             room.Participants.Remove(participant);
 
             OnClientRoomLeft?.Invoke(this, participant.SocketId);
@@ -127,30 +104,7 @@ public class RoomService : IRoomService
 
             foreach (var participant in participants)
             {
-                participant.KeyframeTimer?.Dispose();
-                participant.KeyframeTimer = null;
-
-                if (participant.PeerConnection != null)
-                {
-                    participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
-                    participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
-                    participant.PeerConnection.onconnectionstatechange -= participant.OnConnectionStateChangeHandler;
-                    participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
-                    participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
-                    participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
-
-                    participant.PeerConnection.Close("Room left");
-                    participant.PeerConnection.Dispose();
-                    participant.PeerConnection = null;
-
-                    participant.OnIceCandidateHandler = null;
-                    participant.OnSignalingStateChangeHandler = null;
-                    participant.OnConnectionStateChangeHandler = null;
-                    participant.OnRtpPacketReceivedHandler = null;
-                    participant.OnReceiveReportHandler = null;
-                    participant.OnTimeoutHandler = null;
-                }
-
+                CleanupParticipantPeerConnection(participant);
                 room.Participants.Remove(participant);
             }
 
@@ -181,6 +135,8 @@ public class RoomService : IRoomService
 
         var offer = ParseOfferJson(offerJson);
 
+        CleanupParticipantPeerConnection(participant);
+
         var config = new RTCConfiguration
         {
             X_UseRtpFeedbackProfile = true
@@ -206,8 +162,7 @@ public class RoomService : IRoomService
         }
 
         var opusFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 111, "opus", 48000, 2);
-        var pcmuFormat = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 0, "PCMU", 8000);
-        var audioTrack = new MediaStreamTrack(SDPMediaTypesEnum.audio, false, new List<SDPAudioVideoMediaFormat> { opusFormat, pcmuFormat }, MediaStreamStatusEnum.SendRecv);
+        var audioTrack = new MediaStreamTrack(SDPMediaTypesEnum.audio, false, new List<SDPAudioVideoMediaFormat> { opusFormat }, MediaStreamStatusEnum.SendRecv);
         pc.addTrack(audioTrack);
 
         var h264Format = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 102, "H264", 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f");
@@ -257,9 +212,37 @@ public class RoomService : IRoomService
             {
                 logger.LogDebug(ex, "Periodic PLI failed for participant {SocketId}", participant.SocketId);
             }
-        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5));
 
         return answer;
+    }
+
+    private void CleanupParticipantPeerConnection(Data.Participant participant)
+    {
+        participant.KeyframeTimer?.Dispose();
+        participant.KeyframeTimer = null;
+        participant.Ssrc = 0;
+
+        if (participant.PeerConnection != null)
+        {
+            participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
+            participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
+            participant.PeerConnection.onconnectionstatechange -= participant.OnConnectionStateChangeHandler;
+            participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
+            participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
+            participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
+
+            participant.PeerConnection.Close("Renegotiating");
+            participant.PeerConnection.Dispose();
+            participant.PeerConnection = null;
+
+            participant.OnIceCandidateHandler = null;
+            participant.OnSignalingStateChangeHandler = null;
+            participant.OnConnectionStateChangeHandler = null;
+            participant.OnRtpPacketReceivedHandler = null;
+            participant.OnReceiveReportHandler = null;
+            participant.OnTimeoutHandler = null;
+        }
     }
 
     private void Pc_OnTimeout(SDPMediaTypesEnum mediaType, Guid roomId, Guid socketId, RTCPeerConnection pc)
