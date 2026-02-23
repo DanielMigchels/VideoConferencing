@@ -44,4 +44,10 @@ public class Participant
 
     [JsonIgnore]
     public Action<SDPMediaTypesEnum>? OnTimeoutHandler { get; set; }
+
+    [JsonIgnore]
+    public System.Threading.Timer KeyframeTimer { get; set; }
+
+    [JsonIgnore]
+    public Action<RTCPeerConnectionState> OnConnectionStateChangeHandler { get; internal set; }
 }
