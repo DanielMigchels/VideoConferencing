@@ -87,9 +87,9 @@ export class Lobby implements OnInit {
 
     this.localStream = await navigator.mediaDevices.getUserMedia({
       video: {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 60 }
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 24, max: 30 }
       },
       audio: {
         echoCancellation: true,
@@ -111,6 +111,8 @@ export class Lobby implements OnInit {
     this.localStream.getTracks().forEach(track => {
       this.localPeerConnection!.addTrack(track, this.localStream!);
     });
+
+    await this.applyBandwidthLimits();
 
     this.localPeerConnection.onicecandidate = (event) => {
       if (event.candidate) {
@@ -159,5 +161,30 @@ export class Lobby implements OnInit {
 
     this.localStream?.getTracks().forEach(track => track.stop());
     this.localStream = null;
+  }
+
+  private async applyBandwidthLimits() {
+    if (!this.localPeerConnection) return;
+
+    const senders = this.localPeerConnection.getSenders();
+    for (const sender of senders) {
+      const params = sender.getParameters();
+      if (!params.encodings || params.encodings.length === 0) {
+        params.encodings = [{}];
+      }
+
+      if (sender.track?.kind === 'video') {
+        params.encodings[0].maxBitrate = 500_000;
+        params.encodings[0].maxFramerate = 30;
+      } else if (sender.track?.kind === 'audio') {
+        params.encodings[0].maxBitrate = 32_000;
+      }
+
+      try {
+        await sender.setParameters(params);
+      } catch (err) {
+        console.warn('Failed to set sender parameters:', err);
+      }
+    }
   }
 }
