@@ -51,10 +51,14 @@ public class RoomService : IRoomService
 
         foreach (var participant in participants)
         {
+            participant.KeyframeTimer?.Dispose();
+            participant.KeyframeTimer = null;
+
             if (participant.PeerConnection != null)
             {
                 participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
                 participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
+                participant.PeerConnection.onconnectionstatechange -= participant.OnConnectionStateChangeHandler;
                 participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
                 participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
                 participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
@@ -65,6 +69,7 @@ public class RoomService : IRoomService
 
                 participant.OnIceCandidateHandler = null;
                 participant.OnSignalingStateChangeHandler = null;
+                participant.OnConnectionStateChangeHandler = null;
                 participant.OnRtpPacketReceivedHandler = null;
                 participant.OnReceiveReportHandler = null;
                 participant.OnTimeoutHandler = null;
@@ -122,10 +127,14 @@ public class RoomService : IRoomService
 
             foreach (var participant in participants)
             {
+                participant.KeyframeTimer?.Dispose();
+                participant.KeyframeTimer = null;
+
                 if (participant.PeerConnection != null)
                 {
                     participant.PeerConnection.onicecandidate -= participant.OnIceCandidateHandler;
                     participant.PeerConnection.onsignalingstatechange -= participant.OnSignalingStateChangeHandler;
+                    participant.PeerConnection.onconnectionstatechange -= participant.OnConnectionStateChangeHandler;
                     participant.PeerConnection.OnRtpPacketReceived -= participant.OnRtpPacketReceivedHandler;
                     participant.PeerConnection.OnReceiveReport -= participant.OnReceiveReportHandler;
                     participant.PeerConnection.OnTimeout -= participant.OnTimeoutHandler;
@@ -136,6 +145,7 @@ public class RoomService : IRoomService
 
                     participant.OnIceCandidateHandler = null;
                     participant.OnSignalingStateChangeHandler = null;
+                    participant.OnConnectionStateChangeHandler = null;
                     participant.OnRtpPacketReceivedHandler = null;
                     participant.OnReceiveReportHandler = null;
                     participant.OnTimeoutHandler = null;
@@ -200,8 +210,9 @@ public class RoomService : IRoomService
         var audioTrack = new MediaStreamTrack(SDPMediaTypesEnum.audio, false, new List<SDPAudioVideoMediaFormat> { opusFormat, pcmuFormat }, MediaStreamStatusEnum.SendRecv);
         pc.addTrack(audioTrack);
 
+        var h264Format = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 102, "H264", 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f");
         var vp8Format = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 96, "VP8", 90000);
-        var videoTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { vp8Format }, MediaStreamStatusEnum.SendRecv);
+        var videoTrack = new MediaStreamTrack(SDPMediaTypesEnum.video, false, new List<SDPAudioVideoMediaFormat> { h264Format, vp8Format }, MediaStreamStatusEnum.SendRecv);
         pc.addTrack(videoTrack);
 
         var result = pc.setRemoteDescription(offer);
@@ -219,13 +230,34 @@ public class RoomService : IRoomService
         participant.OnReceiveReportHandler = (remoteEP, mediaType, rtcpReport) => Pc_OnReceiveReport(remoteEP, mediaType, rtcpReport, roomId, socketId, pc);
         participant.OnTimeoutHandler = mediaType => Pc_OnTimeout(mediaType, roomId, socketId, pc);
 
+        participant.OnConnectionStateChangeHandler = state => Pc_onconnectionstatechange(state, roomId, socketId, pc);
+
         pc.onicecandidate += participant.OnIceCandidateHandler;
         pc.onsignalingstatechange += participant.OnSignalingStateChangeHandler;
+        pc.onconnectionstatechange += participant.OnConnectionStateChangeHandler;
         pc.OnRtpPacketReceived += participant.OnRtpPacketReceivedHandler;
         pc.OnReceiveReport += participant.OnReceiveReportHandler;
         pc.OnTimeout += participant.OnTimeoutHandler;
 
         participant.PeerConnection = pc;
+
+        participant.KeyframeTimer = new System.Threading.Timer(_ =>
+        {
+            try
+            {
+                if (participant.PeerConnection != null &&
+                    participant.PeerConnection.connectionState == RTCPeerConnectionState.connected &&
+                    participant.Ssrc != 0)
+                {
+                    var pli = new RTCPFeedback(participant.Ssrc, participant.Ssrc, PSFBFeedbackTypesEnum.PLI);
+                    participant.PeerConnection.SendRtcpFeedback(SDPMediaTypesEnum.video, pli);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Periodic PLI failed for participant {SocketId}", participant.SocketId);
+            }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
 
         return answer;
     }
@@ -237,7 +269,26 @@ public class RoomService : IRoomService
 
     private void Pc_OnReceiveReport(System.Net.IPEndPoint remoteEP, SDPMediaTypesEnum mediaType, RTCPCompoundPacket rtcpReport, Guid roomId, Guid socketId, RTCPeerConnection pc)
     {
-        // logger.LogInformation($"Received RTCP report from type: {mediaType} | RoomId: {roomId} | SocketId: {socketId}");
+        if (mediaType == SDPMediaTypesEnum.video && rtcpReport.Feedback != null)
+        {
+            if (rtcpReport.Feedback.Header.PayloadFeedbackMessageType == PSFBFeedbackTypesEnum.PLI ||
+                rtcpReport.Feedback.Header.PayloadFeedbackMessageType == PSFBFeedbackTypesEnum.FIR)
+            {
+                if (!rooms.TryGetValue(roomId, out var room))
+                {
+                    return;
+                }
+
+                // Thread-safe snapshot
+                foreach (var participant in room.Participants.ToList())
+                {
+                    if (participant.SocketId != socketId)
+                    {
+                        RequestKeyframeFrom(participant.SocketId);
+                    }
+                }
+            }
+        }
     }
 
     private void Pc_OnRtpPacketReceived(System.Net.IPEndPoint remoteEP, SDPMediaTypesEnum mediaType, RTPPacket rtpPacket, Guid roomId, Guid socketId, RTCPeerConnection pc)
@@ -247,15 +298,20 @@ public class RoomService : IRoomService
             return;
         }
 
-        var participants = room.Participants;
-        if (participants == null || participants.Count() == 0)
+        // Take a thread-safe snapshot to avoid collection-modified exceptions
+        var participants = room.Participants.ToList();
+        if (participants.Count == 0)
         {
             return;
         }
 
         if (mediaType == SDPMediaTypesEnum.video)
         {
-            participants.First(x => x.SocketId == socketId).Ssrc = rtpPacket.Header.SyncSource;
+            var sender = participants.FirstOrDefault(x => x.SocketId == socketId);
+            if (sender != null)
+            {
+                sender.Ssrc = rtpPacket.Header.SyncSource;
+            }
         }
 
         var payload = rtpPacket.Payload;
@@ -263,9 +319,9 @@ public class RoomService : IRoomService
         var markerBit = rtpPacket.Header.MarkerBit;
         var payloadType = rtpPacket.Header.PayloadType;
 
-        for (int i = 0; i < participants.Count(); i++)
+        for (int i = 0; i < participants.Count; i++)
         {
-            var target = participants.ElementAt(i);
+            var target = participants[i];
 
             if (target.SocketId == socketId)
             {
@@ -283,7 +339,41 @@ public class RoomService : IRoomService
                 continue;
             }
 
-            targetPc.SendRtpRaw(mediaType, payload, timestamp, markerBit, payloadType);
+            try
+            {
+                targetPc.SendRtpRaw(mediaType, payload, timestamp, markerBit, payloadType);
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Failed to forward RTP packet to {SocketId}", target.SocketId);
+            }
+        }
+    }
+
+    private void Pc_onconnectionstatechange(RTCPeerConnectionState state, Guid roomId, Guid socketId, RTCPeerConnection pc)
+    {
+        logger.LogInformation("Connection state changed to {State} | RoomId: {RoomId} | SocketId: {SocketId}", state, roomId, socketId);
+
+        if (state == RTCPeerConnectionState.connected)
+        {
+            // Immediately request keyframes from all other participants
+            RequestKeyframes(roomId, socketId);
+
+            // Send additional PLI requests after short delays to ensure decoder starts cleanly
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(300);
+                    RequestKeyframes(roomId, socketId);
+                    await Task.Delay(700);
+                    RequestKeyframes(roomId, socketId);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogDebug(ex, "Delayed keyframe request failed for {SocketId}", socketId);
+                }
+            });
         }
     }
 
@@ -299,14 +389,17 @@ public class RoomService : IRoomService
 
     private void RequestKeyframeFrom(Guid participantId)
     {
-        if (!rooms.Values.Any(r => r.Participants.Any(p => p.SocketId == participantId && p.Ssrc != 0)))
+        // Thread-safe: snapshot rooms.Values and participant lists
+        var allRooms = rooms.Values.ToList();
+
+        if (!allRooms.Any(r => r.Participants.ToList().Any(p => p.SocketId == participantId && p.Ssrc != 0)))
         {
             return;
         }
 
-        foreach (var room in rooms.Values)
+        foreach (var room in allRooms)
         {
-            var participant = room.Participants.FirstOrDefault(p => p.SocketId == participantId);
+            var participant = room.Participants.ToList().FirstOrDefault(p => p.SocketId == participantId);
             if (participant?.PeerConnection != null && participant.PeerConnection.connectionState == RTCPeerConnectionState.connected)
             {
                 try
@@ -326,14 +419,15 @@ public class RoomService : IRoomService
 
     public void RequestKeyframes(Guid roomId, Guid socketId)
     {
-        logger.LogInformation($"Requesting keyframes for new participant | RoomId: {roomId} | SocketId: {socketId}");
+        logger.LogInformation("Requesting keyframes for participant | RoomId: {RoomId} | SocketId: {SocketId}", roomId, socketId);
 
         if (!rooms.TryGetValue(roomId, out var room))
         {
             return;
         }
 
-        foreach (var participant in room.Participants)
+        // Thread-safe snapshot
+        foreach (var participant in room.Participants.ToList())
         {
             if (participant.SocketId != socketId)
             {

@@ -1,9 +1,10 @@
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NgIconComponent } from "@ng-icons/core";
 import { VideoConferencingWebSocketService } from '../../services/websocket/video-conferencing-web-socket.service';
 import { Room } from '../../data/room';
 import { Loader } from "../../components/loader/loader";
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-lobby',
@@ -11,36 +12,66 @@ import { Loader } from "../../components/loader/loader";
   templateUrl: './lobby.html',
   styleUrl: './lobby.css',
 })
-export class Lobby implements OnInit {
+export class Lobby implements OnInit, OnDestroy {
   rooms: Room[] = [];
   joinedRoom: Room | null = null;
   showSecondParticipant = false;
+
+  private subscriptions: Subscription[] = [];
 
   constructor(private ws: VideoConferencingWebSocketService) {
 
   }
 
   ngOnInit() {
-    this.ws.getRoomListUpdated().subscribe(x => {
-      this.rooms = x.rooms;
-    });
+    this.subscriptions.push(
+      this.ws.getRoomListUpdated().subscribe(x => {
+        this.rooms = x.rooms;
+      })
+    );
 
-    this.ws.getRoomUpdated().subscribe(async x => {
-      this.showSecondParticipant = x.room?.participantCount! > 1;
+    this.subscriptions.push(
+      this.ws.getRoomUpdated().subscribe(async x => {
+        this.showSecondParticipant = x.room?.participantCount! > 1;
 
-      if (this.joinedRoom === null) {
-        this.joinedRoom = x.room;
-        this.startVideo();
-      }
-      else {
-        this.joinedRoom = x.room;
-      }
+        if (this.joinedRoom === null) {
+          this.joinedRoom = x.room;
+          this.startVideo();
+        }
+        else {
+          this.joinedRoom = x.room;
+        }
+      })
+    );
 
-    });
+    this.subscriptions.push(
+      this.ws.getOfferProcessed().subscribe(async x => {
+        await this.offerProcessed(x.sdp, x.answerType as RTCSdpType);
+      })
+    );
 
-    this.ws.getOfferProcessed().subscribe(async x => {
-      await this.offerProcessed(x.sdp, x.answerType as RTCSdpType);
-    });
+    this.subscriptions.push(
+      this.ws.getDisconnected().subscribe(() => {
+        console.debug('WebSocket disconnected — cleaning up WebRTC');
+        this.cleanupPeerConnection();
+      })
+    );
+
+    this.subscriptions.push(
+      this.ws.getConnected().subscribe(() => {
+        if (this.joinedRoom !== null) {
+          console.debug('WebSocket reconnected — rejoining room and renegotiating');
+          const roomId = this.joinedRoom.id;
+          this.joinedRoom = null;
+          this.ws.joinRoom(roomId);
+        }
+      })
+    );
+  }
+
+  ngOnDestroy() {
+    this.subscriptions.forEach(s => s.unsubscribe());
+    this.stopVideo();
   }
 
   addRoom() {
@@ -73,6 +104,9 @@ export class Lobby implements OnInit {
   private localPeerConnection: RTCPeerConnection | null = null;
   private readonly configuration: RTCConfiguration = {};
   remoteParticipant?: MediaStream;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private maxRetries = 5;
+  private retryCount = 0;
 
   async startVideo() {
     if (this.joinedRoom === null) {
@@ -80,23 +114,28 @@ export class Lobby implements OnInit {
     }
 
     if (this.localStream) {
-      this.stopVideo();
+      this.cleanupPeerConnection();
     }
 
     console.debug('Starting local video...');
 
-    this.localStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-        frameRate: { ideal: 24, max: 30 }
-      },
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      }
-    });
+    try {
+      this.localStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 854 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 24, max: 30 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+    } catch (err) {
+      console.error('Failed to get user media:', err);
+      return;
+    }
 
     const videoOnlyStream = new MediaStream(
       this.localStream.getVideoTracks()
@@ -105,6 +144,16 @@ export class Lobby implements OnInit {
     if (this.localVideo) {
       this.localVideo.nativeElement.srcObject = videoOnlyStream;
     }
+
+    await this.createAndSendOffer();
+  }
+
+  private async createAndSendOffer() {
+    if (!this.localStream || !this.joinedRoom) {
+      return;
+    }
+
+    this.cleanupPeerConnection();
 
     this.localPeerConnection = new RTCPeerConnection(this.configuration);
 
@@ -125,22 +174,106 @@ export class Lobby implements OnInit {
       const remoteStream = event.streams[0];
 
       this.remoteParticipant = remoteStream;
-      this.remoteVideo!.nativeElement.srcObject = remoteStream;
+      if (this.remoteVideo) {
+        this.remoteVideo.nativeElement.srcObject = remoteStream;
+      }
     };
 
     this.localPeerConnection.onconnectionstatechange = () => {
-      console.debug('Connection state change:', this.localPeerConnection!.connectionState);
+      const state = this.localPeerConnection?.connectionState;
+      console.debug('Connection state change:', state);
+
+      if (state === 'failed') {
+        console.warn('WebRTC connection failed — scheduling retry');
+        this.scheduleRetry();
+      } else if (state === 'disconnected') {
+        console.warn('WebRTC connection disconnected — waiting before retry');
+        // Wait a few seconds for the connection to recover on its own
+        this.retryTimer = setTimeout(() => {
+          if (this.localPeerConnection?.connectionState === 'disconnected') {
+            console.warn('WebRTC still disconnected — scheduling retry');
+            this.scheduleRetry();
+          }
+        }, 5000);
+      } else if (state === 'connected') {
+        this.retryCount = 0;
+        if (this.retryTimer) {
+          clearTimeout(this.retryTimer);
+          this.retryTimer = null;
+        }
+        // Request keyframe once the connection is fully established
+        if (this.joinedRoom) {
+          this.ws.requestKeyframe(this.joinedRoom.id);
+          setTimeout(() => {
+            if (this.joinedRoom) {
+              this.ws.requestKeyframe(this.joinedRoom.id);
+            }
+          }, 1000);
+        }
+      }
     };
 
-    const offer = await this.localPeerConnection!.createOffer();
-    await this.localPeerConnection!.setLocalDescription(offer);
-    console.debug('Send offer...');
-    this.ws.sendOffer(this.joinedRoom!.id, offer);
+    this.localPeerConnection.oniceconnectionstatechange = () => {
+      const state = this.localPeerConnection?.iceConnectionState;
+      console.debug('ICE connection state change:', state);
+
+      if (state === 'failed') {
+        console.warn('ICE connection failed — attempting ICE restart');
+        this.attemptIceRestart();
+      }
+    };
+
+    try {
+      const offer = await this.localPeerConnection.createOffer();
+      await this.localPeerConnection.setLocalDescription(offer);
+      console.debug('Send offer...');
+      this.ws.sendOffer(this.joinedRoom!.id, offer);
+    } catch (err) {
+      console.error('Failed to create/send offer:', err);
+      this.scheduleRetry();
+    }
+  }
+
+  private async attemptIceRestart() {
+    if (!this.localPeerConnection || !this.joinedRoom) {
+      return;
+    }
+
+    try {
+      const offer = await this.localPeerConnection.createOffer({ iceRestart: true });
+      await this.localPeerConnection.setLocalDescription(offer);
+      console.debug('Sending ICE restart offer...');
+      this.ws.sendOffer(this.joinedRoom.id, offer);
+    } catch (err) {
+      console.error('ICE restart failed:', err);
+      this.scheduleRetry();
+    }
+  }
+
+  private scheduleRetry() {
+    if (this.retryCount >= this.maxRetries) {
+      console.error('Max WebRTC retries reached');
+      return;
+    }
+
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+    }
+
+    const delay = Math.min(1000 * Math.pow(2, this.retryCount), 15000);
+    this.retryCount++;
+    console.debug(`Scheduling WebRTC reconnect attempt ${this.retryCount} in ${delay}ms`);
+
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.createAndSendOffer();
+    }, delay);
   }
 
   async offerProcessed(sdp: string, answerType: RTCSdpType): Promise<void> {
     if (!this.localPeerConnection) {
-      throw new Error("PeerConnection not initialized");
+      console.warn('PeerConnection not initialized when offer was processed');
+      return;
     }
 
     const description: RTCSessionDescriptionInit = {
@@ -148,19 +281,39 @@ export class Lobby implements OnInit {
       type: answerType,
     };
 
-    await this.localPeerConnection.setRemoteDescription(description);
+    try {
+      await this.localPeerConnection.setRemoteDescription(description);
+      this.ws.requestKeyframe(this.joinedRoom!.id);
+    } catch (err) {
+      console.error('Failed to set remote description:', err);
+      this.scheduleRetry();
+    }
+  }
 
-    this.ws.requestKeyframe(this.joinedRoom!.id);
+  private cleanupPeerConnection() {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+
+    if (this.localPeerConnection) {
+      this.localPeerConnection.onicecandidate = null;
+      this.localPeerConnection.ontrack = null;
+      this.localPeerConnection.onconnectionstatechange = null;
+      this.localPeerConnection.oniceconnectionstatechange = null;
+      this.localPeerConnection.close();
+      this.localPeerConnection = null;
+    }
   }
 
   async stopVideo() {
     console.debug('Stopping local video...');
 
-    this.localPeerConnection?.close();
-    this.localPeerConnection = null;
+    this.cleanupPeerConnection();
 
     this.localStream?.getTracks().forEach(track => track.stop());
     this.localStream = null;
+    this.retryCount = 0;
   }
 
   private async applyBandwidthLimits() {
