@@ -112,10 +112,7 @@ export class Lobby implements OnInit, OnDestroy {
   @ViewChild('remoteVideo') remoteVideo?: ElementRef<HTMLVideoElement>;
   private localPeerConnection: RTCPeerConnection | null = null;
   private readonly configuration: RTCConfiguration = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ],
+    iceServers: [],
   };
   remoteParticipant?: MediaStream;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
