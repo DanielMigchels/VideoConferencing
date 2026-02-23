@@ -17,6 +17,7 @@ import { OfferProcessed } from './models/response/offer-processed';
 export class VideoConferencingWebSocketService {
   private socket: WebSocket | null = null;
   private connected = new Subject<void>();
+  private disconnected = new Subject<void>();
   private getRoomListUpdatedSubject = new Subject<RoomListUpdated>();
   private getRoomUpdatedSubject = new Subject<RoomUpdated>();
   private getOfferProcessedSubject = new Subject<OfferProcessed>();
@@ -68,6 +69,10 @@ export class VideoConferencingWebSocketService {
     return this.connected.asObservable();
   }
 
+  getDisconnected(): Observable<void> {
+    return this.disconnected.asObservable();
+  }
+
   getRoomListUpdated(): Observable<RoomListUpdated> {
     return this.getRoomListUpdatedSubject.asObservable();
   }
@@ -96,6 +101,7 @@ export class VideoConferencingWebSocketService {
       this.socket.onmessage = (event) => this.handleMessage(event.data);
       this.socket.onclose = () => {
         console.debug('WebSocket disconnected, refreshing webpage...');
+        this.disconnected.next();
         window.location.reload();
       };
       this.socket.onerror = (error) => console.error('WebSocket error:', error);
